@@ -1,0 +1,35 @@
+#include <Keyboard.h>  // Include the Keyboard library
+
+const int sensorPin = A0;  // Photoresistor connected to analog pin A0
+const int threshold =  1;  // Light threshold value (adjustable)
+bool spacebarSent = false;  // Flag to track if the spacebar has been sent
+
+void setup() {
+  pinMode(sensorPin, INPUT);  // Set the sensor pin as an input
+  Keyboard.begin();  // Initialize the Keyboard library
+  Serial.begin(9600);  // Initialize serial communication at 9600 baud rate
+}
+
+void loop() {
+  int lightLevel = analogRead(sensorPin);  // Read the current light level
+
+  // Print the light level to the Serial Monitor
+  Serial.print("Light level: ");
+  Serial.println(lightLevel);
+
+  // Check if the light level is below the threshold and the spacebar hasn't been sent yet
+  if (lightLevel < threshold && !spacebarSent) {
+    // Send the "spacebar" keystroke
+    Keyboard.press(' ');
+    delay(100);  // Debounce delay
+    Keyboard.release(' ');
+    spacebarSent = true;  // Set flag to true to prevent sending the spacebar again
+  }
+
+  // Check if the light level is above the threshold to reset the flag
+  if (lightLevel >= threshold) {
+    spacebarSent = false;  // Reset the flag when light level goes back above threshold
+  }
+
+  delay(500);  // Add a small delay to prevent overwhelming the serial monitor
+}

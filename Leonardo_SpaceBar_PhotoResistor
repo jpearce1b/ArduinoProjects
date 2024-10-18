@@ -1,7 +1,7 @@
 #include <Keyboard.h>  // Include the Keyboard library
 
 const int sensorPin = A0;  // Photoresistor connected to analog pin A0
-const int threshold =  1;  // Light threshold value (adjustable)
+const int threshold = 700;  // Light threshold value (adjustable)
 bool spacebarSent = false;  // Flag to track if the spacebar has been sent
 
 void setup() {

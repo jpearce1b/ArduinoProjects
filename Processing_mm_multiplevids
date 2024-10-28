@@ -1,1 +1,85 @@
+import processing.serial.*;
+import processing.video.*; // Import the video library
+
+Serial myPort;       // The serial port object
+Movie video1, video4; // Video objects
+boolean isTriggeredVideoPlaying = false; // Flag to track if the triggered video is playing
+
+void setup() {
+  fullScreen(P2D, 1); // Fullscreen on display 1 with P2D renderer
+  size(800, 480); // Set the resolution for the video
+  
+  // Print the list of available serial ports to the console
+  println("Available serial ports:");
+  String[] portList = Serial.list();
+  
+  // List out each port
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]);
+  }
+
+  // Select the correct serial port by its index (update the index after running the sketch)
+  int portIndex = 1; // Change this to the correct index number once you know it
+  String portName = portList[portIndex];
+  
+  // Set up the serial communication
+  myPort = new Serial(this, portName, 9600);
+
+  // Load video files
+  video1 = new Movie(this, "fire.mp4"); // Triggered video
+  video4 = new Movie(this, "background.mp4"); // Background video to play on a loop
+  video4.loop(); // Start the background video in loop mode by default
+}
+
+void movieEvent(Movie m) {
+  m.read(); // Ensure frames are being read
+}
+
+void draw() {
+  background(0); // Clear the screen with a black background
+
+  if (myPort.available() > 0) {
+    String inString = myPort.readStringUntil('\n'); // Read the incoming serial data
+    if (inString != null) {
+      inString = inString.trim(); // Remove any trailing newline characters
+
+      // Play the triggered video based on the input from the Arduino
+      if (inString.equals("1")) {
+        stopAllVideos();
+        playTriggeredVideo(video1);
+      }
+    }
+  }
+  
+  // Continuously draw the current frame from the video (if it's playing)
+  if (video1.isPlaying()) {
+    image(video1, 0, 0, width, height);
+  } else if (video4.isPlaying()) {
+    image(video4, 0, 0, width, height);
+  }
+
+  // Check if the triggered video has finished playing, and return to looping video4 if so
+  if (isTriggeredVideoPlaying && !video1.isPlaying()) {
+    isTriggeredVideoPlaying = false;
+    video4.loop();
+  }
+}
+
+// Function to play the triggered video once
+void playTriggeredVideo(Movie video) {
+  isTriggeredVideoPlaying = true;
+  video.play();
+}
+
+// Function to stop all videos
+void stopAllVideos() {
+  if (video1.isPlaying()) video1.stop();
+  if (video4.isPlaying()) video4.stop();
+}
+
+void stop() {
+  // Stop the videos when done
+  stopAllVideos();
+  super.stop();
+}
 

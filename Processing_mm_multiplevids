@@ -45,8 +45,7 @@ void draw() {
 
       // Play the triggered video based on the input from the Arduino
       if (inString.equals("1")) {
-        stopAllVideos();
-        playTriggeredVideo(video1);
+        playTriggeredVideo();
       }
     }
   }
@@ -54,21 +53,29 @@ void draw() {
   // Continuously draw the current frame from the video (if it's playing)
   if (video1.isPlaying()) {
     image(video1, 0, 0, width, height);
-  } else if (video4.isPlaying()) {
+  } else {
+    // Ensure video4 stays in loop mode if no other video is playing
+    if (!video4.isPlaying()) {
+      video4.loop();
+    }
     image(video4, 0, 0, width, height);
   }
 
   // Check if the triggered video has finished playing, and return to looping video4 if so
   if (isTriggeredVideoPlaying && !video1.isPlaying()) {
     isTriggeredVideoPlaying = false;
-    video4.loop();
+    video4.loop(); // Ensure video4 resumes looping
   }
 }
 
 // Function to play the triggered video once
-void playTriggeredVideo(Movie video) {
-  isTriggeredVideoPlaying = true;
-  video.play();
+void playTriggeredVideo() {
+  if (!isTriggeredVideoPlaying) {
+    isTriggeredVideoPlaying = true;
+    stopAllVideos(); // Stop background video before playing triggered video
+    video1.play();
+    video1.jump(0); // Ensure video1 starts from the beginning
+  }
 }
 
 // Function to stop all videos
@@ -82,4 +89,8 @@ void stop() {
   stopAllVideos();
   super.stop();
 }
+
+
+
+
 

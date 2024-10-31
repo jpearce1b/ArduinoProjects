@@ -13,10 +13,15 @@ const int ledPin = 13;
 
 // Variables to track button states and motor control
 bool motorRunning = false;             // Tracks if the motor is running
-int motorDirection = FORWARD;           // Current motor direction
-bool button1LastState = HIGH;           // Tracks previous state of Button 1
-unsigned long button2PressTime = 0;     // Track when Button 2 was pressed
-bool button2Active = false;             // Track if Button 2 sequence is active
+int motorDirection = FORWARD;          // Current motor direction
+bool button1LastState = HIGH;          // Tracks previous state of Button 1
+unsigned long lastButton1Press = 0;    // Tracks last press time for Button 1
+const unsigned long debounceDelay = 200; // Increased debounce delay for Button 1
+unsigned long button2PressTime = 0;    // Track when Button 2 was pressed
+bool button2Active = false;            // Track if Button 2 sequence is active
+bool button2SequenceComplete = false;  // Track if Button 2 sequence is completed
+bool button3Active = false;            // Track if Button 3 sequence is active
+bool button3SequenceComplete = false;  // Track if Button 3 sequence is completed
 
 void setup() {
   Serial.begin(9600);                   // Begin serial communication for debugging
@@ -36,10 +41,11 @@ void loop() {
   bool button2State = digitalRead(button2Pin) == LOW;
   bool button3State = digitalRead(button3Pin) == LOW;
 
-  // Toggle control for Button 1
-  if (button1State && button1LastState == HIGH) {
-    motorRunning = !motorRunning;  // Toggle motor running state
-    motorDirection = FORWARD;      // Ensure direction is clockwise
+  // Toggle control for Button 1 with improved debounce
+  if (button1State && button1LastState == HIGH && (millis() - lastButton1Press > debounceDelay)) {
+    lastButton1Press = millis();       // Update last press time
+    motorRunning = !motorRunning;      // Toggle motor running state
+    motorDirection = FORWARD;          // Ensure direction is clockwise
     if (motorRunning) {
       Serial.println("Button 1 Pressed: Starting motor clockwise");
     } else {
@@ -48,8 +54,8 @@ void loop() {
   }
   button1LastState = button1State;
 
-  // Button 2 control: initiate LED, stop motor, then resume counterclockwise after 15 seconds
-  if (button2State && !button2Active) { 
+  // Button 2 control: initiate LED, stop motor, and start motor counterclockwise after 15 seconds
+  if (button2State && !button2Active && !button2SequenceComplete) { 
     Serial.println("Button 2 Pressed: Stopping motor, lighting LED");
     motorRunning = false;              // Stop the motor
     digitalWrite(ledPin, HIGH);        // Turn on LED
@@ -57,22 +63,35 @@ void loop() {
     button2Active = true;              // Set Button 2 sequence as active
   }
 
-  // After 15 seconds, turn off LED, start motor counterclockwise, regardless of button state
+  // After 15 seconds, turn off LED, start motor counterclockwise
   if (button2Active && (millis() - button2PressTime >= 15000)) {
     Serial.println("15 seconds elapsed: Turning off LED, starting motor counterclockwise");
     digitalWrite(ledPin, LOW);          // Turn off LED
     motorDirection = BACKWARD;          // Set direction to counterclockwise
     motorRunning = true;                // Start the motor
-    button2Active = false;              // Reset Button 2 state to allow for new presses
+    button2SequenceComplete = true;     // Mark sequence as completed
+    button2Active = false;              // Reset Button 2 active state
   }
 
-  // Button 3 control: stop motor briefly, then start clockwise
-  if (button3State) {
-    Serial.println("Button 3 Pressed: Stopping motor briefly, then starting clockwise");
-    motorRunning = false;
-    delay(1000);                        // Pause for 1 second
+  // Reset Button 2 sequence state after release
+  if (!button2State && button2SequenceComplete) {
+    Serial.println("Button 2 Released: Sequence ready for next press");
+    button2SequenceComplete = false;    // Reset sequence complete status
+  }
+
+  // Button 3 control: start motor clockwise and keep it running when button is released
+  if (button3State && !button3Active && !button3SequenceComplete) { 
+    Serial.println("Button 3 Pressed: Starting motor clockwise");
     motorDirection = FORWARD;           // Set direction to clockwise
-    motorRunning = true;
+    motorRunning = true;                // Start the motor
+    button3Active = true;               // Set Button 3 sequence as active
+  }
+
+  // Reset Button 3 sequence state after release
+  if (!button3State && button3Active) {
+    Serial.println("Button 3 Released: Sequence ready for next press");
+    button3SequenceComplete = false;    // Reset sequence complete status
+    button3Active = false;              // Reset Button 3 active state
   }
 
   // Run motor if motorRunning is true

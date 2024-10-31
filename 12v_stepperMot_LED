@@ -1,0 +1,82 @@
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+
+// Create the motor shield object
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+Adafruit_StepperMotor *myStepper = AFMS.getStepper(200, 2);  // M3 and M4
+
+// Define button and LED pins
+const int button1Pin = 2;
+const int button2Pin = 3;
+const int button3Pin = 4;
+const int ledPin = 13;
+
+// Variables to track button states and motor control
+bool motorRunning = false;             // Tracks if the motor is running
+int motorDirection = FORWARD;           // Current motor direction
+bool button1LastState = HIGH;           // Tracks previous state of Button 1
+unsigned long button2PressTime = 0;     // Track when Button 2 was pressed
+bool button2Active = false;             // Track if Button 2 sequence is active
+
+void setup() {
+  Serial.begin(9600);                   // Begin serial communication for debugging
+  AFMS.begin();                         // Start the motor shield
+  myStepper->setSpeed(10);              // Set the motor speed (in RPM)
+
+  // Set up button pins and LED pin
+  pinMode(button1Pin, INPUT_PULLUP);
+  pinMode(button2Pin, INPUT_PULLUP);
+  pinMode(button3Pin, INPUT_PULLUP);
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  // Read button states
+  bool button1State = digitalRead(button1Pin) == LOW;
+  bool button2State = digitalRead(button2Pin) == LOW;
+  bool button3State = digitalRead(button3Pin) == LOW;
+
+  // Toggle control for Button 1
+  if (button1State && button1LastState == HIGH) {
+    motorRunning = !motorRunning;  // Toggle motor running state
+    motorDirection = FORWARD;      // Ensure direction is clockwise
+    if (motorRunning) {
+      Serial.println("Button 1 Pressed: Starting motor clockwise");
+    } else {
+      Serial.println("Button 1 Pressed: Stopping motor");
+    }
+  }
+  button1LastState = button1State;
+
+  // Button 2 control: initiate LED, stop motor, then resume counterclockwise after 15 seconds
+  if (button2State && !button2Active) { 
+    Serial.println("Button 2 Pressed: Stopping motor, lighting LED");
+    motorRunning = false;              // Stop the motor
+    digitalWrite(ledPin, HIGH);        // Turn on LED
+    button2PressTime = millis();       // Record the time Button 2 was pressed
+    button2Active = true;              // Set Button 2 sequence as active
+  }
+
+  // After 15 seconds, turn off LED, start motor counterclockwise, regardless of button state
+  if (button2Active && (millis() - button2PressTime >= 15000)) {
+    Serial.println("15 seconds elapsed: Turning off LED, starting motor counterclockwise");
+    digitalWrite(ledPin, LOW);          // Turn off LED
+    motorDirection = BACKWARD;          // Set direction to counterclockwise
+    motorRunning = true;                // Start the motor
+    button2Active = false;              // Reset Button 2 state to allow for new presses
+  }
+
+  // Button 3 control: stop motor briefly, then start clockwise
+  if (button3State) {
+    Serial.println("Button 3 Pressed: Stopping motor briefly, then starting clockwise");
+    motorRunning = false;
+    delay(1000);                        // Pause for 1 second
+    motorDirection = FORWARD;           // Set direction to clockwise
+    motorRunning = true;
+  }
+
+  // Run motor if motorRunning is true
+  if (motorRunning) {
+    myStepper->step(1, motorDirection, SINGLE);  // Step motor in specified direction
+  }
+}

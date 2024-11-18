@@ -1,0 +1,120 @@
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+#include <Adafruit_NeoPixel.h> // Include NeoPixel library
+
+// Create the motor shield object
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+Adafruit_StepperMotor *myStepper = AFMS.getStepper(200, 2);  // M3 and M4
+
+// Define button, LED, and NeoPixel pins
+const int button1Pin = 2;
+const int button2Pin = 3;
+const int button3Pin = 4;
+const int ledPin = 13;
+const int neoPixelPin = 6; // Pin for NeoPixel strip
+const int numPixels = 7;  // Number of NeoPixels
+
+// Variables to track button states and motor control
+bool motorRunning = false;             // Tracks if the motor is running
+int motorDirection = FORWARD;          // Current motor direction
+bool button1LastState = HIGH;          // Tracks previous state of Button 1
+unsigned long lastButton1Press = 0;    // Tracks last press time for Button 1
+const unsigned long debounceDelay = 200; // Increased debounce delay for Button 1
+unsigned long button2PressTime = 0;    // Track when Button 2 was pressed
+bool button2Active = false;            // Track if Button 2 sequence is active
+bool button2SequenceComplete = false;  // Track if Button 2 sequence is completed
+bool button3Active = false;            // Track if Button 3 sequence is active
+bool button3SequenceComplete = false;  // Track if Button 3 sequence is completed
+
+// Initialize NeoPixel strip
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(numPixels, neoPixelPin, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  Serial.begin(9600);                   // Begin serial communication for debugging
+  AFMS.begin();                         // Start the motor shield
+  myStepper->setSpeed(10);              // Set the motor speed (in RPM)
+
+  // Set up button pins, LED pin, and NeoPixel strip
+  pinMode(button1Pin, INPUT_PULLUP);
+  pinMode(button2Pin, INPUT_PULLUP);
+  pinMode(button3Pin, INPUT_PULLUP);
+  pinMode(ledPin, OUTPUT);
+  strip.begin();                        // Initialize NeoPixel strip
+  strip.show();                         // Turn off all NeoPixels initially
+}
+
+void loop() {
+  // Read button states
+  bool button1State = digitalRead(button1Pin) == LOW;
+  bool button2State = digitalRead(button2Pin) == LOW;
+  bool button3State = digitalRead(button3Pin) == LOW;
+
+  // Toggle control for Button 1 with improved debounce
+  if (button1State && button1LastState == HIGH && (millis() - lastButton1Press > debounceDelay)) {
+    lastButton1Press = millis();       // Update last press time
+    motorRunning = !motorRunning;      // Toggle motor running state
+    motorDirection = FORWARD;          // Ensure direction is clockwise
+    if (motorRunning) {
+      Serial.println("Button 1 Pressed: Starting motor clockwise");
+    } else {
+      Serial.println("Button 1 Pressed: Stopping motor");
+    }
+  }
+  button1LastState = button1State;
+
+  // Button 2 control: initiate LED, stop motor, and start motor counterclockwise after 15 seconds
+  if (button2State && !button2Active && !button2SequenceComplete) { 
+    Serial.println("Button 2 Pressed: Stopping motor, lighting LED");
+    motorRunning = false;              // Stop the motor
+    digitalWrite(ledPin, HIGH);        // Turn on LED
+    setNeoPixels(true);                // Turn on NeoPixels
+    button2PressTime = millis();       // Record the time Button 2 was pressed
+    button2Active = true;              // Set Button 2 sequence as active
+  }
+
+  // After 15 seconds, turn off LED, start motor counterclockwise
+  if (button2Active && (millis() - button2PressTime >= 15000)) {
+    Serial.println("15 seconds elapsed: Turning off LED, starting motor counterclockwise");
+    digitalWrite(ledPin, LOW);          // Turn off LED
+    setNeoPixels(false);                // Turn off NeoPixels
+    motorDirection = BACKWARD;          // Set direction to counterclockwise
+    motorRunning = true;                // Start the motor
+    button2SequenceComplete = true;     // Mark sequence as completed
+    button2Active = false;              // Reset Button 2 active state
+  }
+
+  // Reset Button 2 sequence state after release
+  if (!button2State && button2SequenceComplete) {
+    Serial.println("Button 2 Released: Sequence ready for next press");
+    button2SequenceComplete = false;    // Reset sequence complete status
+  }
+
+  // Button 3 control: start motor clockwise and keep it running when button is released
+  if (button3State && !button3Active && !button3SequenceComplete) { 
+    Serial.println("Button 3 Pressed: Starting motor clockwise");
+    motorDirection = FORWARD;           // Set direction to clockwise
+    motorRunning = true;                // Start the motor
+    button3Active = true;               // Set Button 3 sequence as active
+  }
+
+  // Reset Button 3 sequence state after release
+  if (!button3State && button3Active) {
+    Serial.println("Button 3 Released: Sequence ready for next press");
+    button3SequenceComplete = false;    // Reset sequence complete status
+    button3Active = false;              // Reset Button 3 active state
+  }
+
+  // Run motor if motorRunning is true
+  if (motorRunning) {
+    myStepper->step(1, motorDirection, SINGLE);  // Step motor in specified direction
+  }
+}
+
+// Function to control NeoPixels
+void setNeoPixels(bool state) {
+  uint32_t color = state ? strip.Color(255, 255, 255) : 0; // White if ON, off otherwise
+  for (int i = 0; i < numPixels; i++) {
+    strip.setPixelColor(i, color);
+  }
+  strip.show();
+}

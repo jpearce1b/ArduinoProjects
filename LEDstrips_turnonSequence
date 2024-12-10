@@ -1,0 +1,83 @@
+// Pin definitions
+const int ledPins[] = {2, 3, 4, 5, 6, 7, 9, 10}; // LEDs 1-8
+const int buttonPin = 12;                       // Button pin
+
+// Variables to track state
+int buttonState = HIGH;
+int lastButtonState = HIGH;
+int pressCount = 0;
+
+unsigned long lastDebounceTime = 0;            // Debounce timer
+const unsigned long debounceDelay = 50;        // Debounce delay
+
+void setup() {
+  Serial.begin(9600);                          // Start serial communication
+  
+  for (int i = 0; i < 8; i++) {
+    pinMode(ledPins[i], OUTPUT);               // Set LED pins as outputs
+    analogWrite(ledPins[i], 0);                // Initialize all LEDs as OFF
+  }
+
+  pinMode(buttonPin, INPUT_PULLUP);            // Button with pull-up resistor
+}
+
+void loop() {
+  // Debounce the button
+  int reading = digitalRead(buttonPin);
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+  
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+      if (buttonState == LOW) {                // Button pressed
+        pressCount++;
+        Serial.print("Button pressed ");
+        Serial.print(pressCount);
+        Serial.println(" times");
+
+        if (pressCount % 2 == 1) {
+          // Odd press: Activate sequence
+          activateSequence();
+        } else {
+          // Even press: Deactivate sequence
+          deactivateSequence();
+        }
+      }
+    }
+  }
+  lastButtonState = reading;
+}
+
+void activateSequence() {
+  Serial.println("Activating sequence...");
+  // Turn on LEDs 1 to 6 sequentially
+  for (int i = 0; i < 6; i++) {
+    digitalWrite(ledPins[i], HIGH);
+    delay(250);
+  }
+
+  // Gradually turn on LEDs 7 and 8 using PWM
+  for (int brightness = 0; brightness <= 255; brightness++) {
+    analogWrite(ledPins[6], brightness);       // LED 7
+    analogWrite(ledPins[7], brightness);       // LED 8
+    delay(8);                                  // ~2 seconds for full brightness
+  }
+}
+
+void deactivateSequence() {
+  Serial.println("Deactivating sequence...");
+  // Gradually turn off LEDs 7 and 8 using PWM
+  for (int brightness = 255; brightness >= 0; brightness--) {
+    analogWrite(ledPins[6], brightness);       // LED 7
+    analogWrite(ledPins[7], brightness);       // LED 8
+    delay(8);                                  // ~2 seconds for full dim
+  }
+
+  // Turn off LEDs 1 to 6 sequentially
+  for (int i = 5; i >= 0; i--) {
+    digitalWrite(ledPins[i], LOW);
+    delay(250);
+  }
+}

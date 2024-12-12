@@ -1,0 +1,61 @@
+import processing.serial.*;
+
+import ddf.minim.*;          // Import Minim library
+import ddf.minim.analysis.*;  // Import the analysis part for FFT
+
+
+
+Minim minim;
+AudioPlayer player;
+Serial myPort;
+FFT fft;
+
+void setup() {
+  // Print the list of available serial ports to the console
+  println("Available serial ports:");
+  String[] portList = Serial.list();
+  
+  // List out each port
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]);
+  }
+  size(512, 200);
+  minim = new Minim(this);
+  player = minim.loadFile("b2b.mp3");
+  player.play();
+ 
+  // Open serial port (adjust port name if needed)
+  myPort = new Serial(this, Serial.list()[1], 9600);
+ 
+  // Set up FFT for frequency analysis
+  fft = new FFT(player.bufferSize(), player.sampleRate());
+}
+
+void draw() {
+  background(0);
+ 
+  // Perform FFT on the audio buffer
+  fft.forward(player.mix);
+ 
+  // Get frequency bands and map them to ranges
+  float low = fft.getBand(0);    // Low frequencies (e.g., bass)
+  float mid = fft.getBand(10);   // Mid frequencies
+  float high = fft.getBand(20);  // High frequencies
+ 
+  // Send frequency range data to Arduino (you can scale these values)
+  myPort.write(int(low));   // Send low frequency data
+  myPort.write(int(mid));   // Send mid frequency data
+  myPort.write(int(high));  // Send high frequency data
+ 
+  // Visualize the frequency data
+  stroke(255);
+  line(0, height/2, low * width, height/2);    // Low
+  line(0, height/3, mid * width, height/3);    // Mid
+  line(0, height/4, high * width, height/4);   // High
+}
+
+void stop() {
+  player.close();
+  minim.stop();
+  super.stop();
+}

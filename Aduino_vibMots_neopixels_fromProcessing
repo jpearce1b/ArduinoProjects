@@ -1,0 +1,87 @@
+#include <Adafruit_NeoPixel.h>
+
+// Pin Definitions
+const int lowLED = 2;    // LED for low frequencies
+const int midLED = 3;    // LED for mid frequencies
+const int highLED = 4;   // LED for high frequencies
+const int neoPixelPin = 7; // NeoPixel data pin
+const int numPixels = 6;  // Number of NeoPixels
+
+// NeoPixel object
+Adafruit_NeoPixel pixels(numPixels, neoPixelPin, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  Serial.begin(9600);  // Start serial communication at 9600 baud
+
+  pinMode(lowLED, OUTPUT);
+  pinMode(midLED, OUTPUT);
+  pinMode(highLED, OUTPUT);
+
+  pixels.begin();      // Initialize NeoPixel strip
+  pixels.show();       // Turn off all pixels at the start
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    // Read frequency data from Serial
+    int lowFreq = Serial.read();
+    int midFreq = Serial.read();
+    int highFreq = Serial.read();
+
+    // Debugging: Print received data to Serial Monitor
+    Serial.print("Low: ");
+    Serial.print(lowFreq);
+    Serial.print(" Mid: ");
+    Serial.print(midFreq);
+    Serial.print(" High: ");
+    Serial.println(highFreq);
+
+    // Control LEDs
+    if (lowFreq > 50) {
+      digitalWrite(lowLED, HIGH);
+    } else {
+      digitalWrite(lowLED, LOW);
+    }
+
+    if (midFreq > 50) {
+      digitalWrite(midLED, HIGH);
+    } else {
+      digitalWrite(midLED, LOW);
+    }
+
+    if (highFreq > 50) {
+      digitalWrite(highLED, HIGH);
+    } else {
+      digitalWrite(highLED, LOW);
+    }
+
+    // Control NeoPixels
+    updateNeoPixels(lowFreq, midFreq, highFreq);
+  }
+}
+
+void updateNeoPixels(int lowFreq, int midFreq, int highFreq) {
+  // Clear all pixels
+  pixels.clear();
+
+  // Low frequencies (NeoPixels 0 and 1, Red)
+  if (lowFreq > 50) {
+    pixels.setPixelColor(0, pixels.Color(255, 0, 0)); // Red
+    pixels.setPixelColor(1, pixels.Color(255, 0, 0)); // Red
+  }
+
+  // Mid frequencies (NeoPixels 2 and 3, Orange)
+  if (midFreq > 50) {
+    pixels.setPixelColor(2, pixels.Color(157, 255, 0)); // purple
+    pixels.setPixelColor(3, pixels.Color(157, 255, 0)); // purple
+  }
+
+  // High frequencies (NeoPixels 4 and 5, Yellow)
+  if (highFreq > 50) {
+    pixels.setPixelColor(4, pixels.Color(255, 255, 0)); // Yellow
+    pixels.setPixelColor(5, pixels.Color(255, 255, 0)); // Yellow
+  }
+
+  // Show updated colors
+  pixels.show();
+}

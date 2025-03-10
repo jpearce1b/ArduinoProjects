@@ -1,0 +1,66 @@
+import gab.opencv.*;
+import processing.video.*;
+import processing.serial.*;
+import java.util.*;
+import java.awt.Rectangle;
+
+Capture video;
+OpenCV opencv;
+Serial port;
+boolean faceDetected = false;  // Track the last state to prevent redundant serial writes
+
+void setup() {
+  size(640, 480);
+  video = new Capture(this, 640, 480);
+  video.start();
+  
+  opencv = new OpenCV(this, 640, 480);
+  opencv.loadCascade(OpenCV.CASCADE_FRONTALFACE); // Load face detection model
+
+  // List available serial ports
+  println("Available Serial Ports:");
+  String[] portList = Serial.list();
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]); // Prints the index and port name
+  }
+  
+  // Initialize Serial Communication (Choose the correct port)
+  port = new Serial(this, Serial.list()[1], 9600); // Change index [0] if needed
+}
+
+void draw() {
+  if (video.available()) {
+    video.read();
+  }
+
+  image(video, 0, 0);  // Draw the webcam feed
+  opencv.loadImage(video);  // Load image into OpenCV
+
+  // Detect faces
+  Rectangle[] faces = opencv.detect();
+  boolean newFaceDetected = (faces.length > 0);
+
+  // Send data via serial only if the detection state changes
+  if (newFaceDetected != faceDetected) {
+    faceDetected = newFaceDetected;
+    if (faceDetected) {
+      port.write('1');  // Send '1' when a face is detected
+    } else {
+      port.write('0');  // Send '0' when no face is detected
+    }
+  }
+
+  // Draw face rectangles and show "Face Detected" message
+  if (faceDetected) {
+    fill(255, 0, 0);
+    textSize(32);
+    text("Face Detected", 20, 40);
+    
+    noFill();
+    stroke(0, 255, 0);
+    strokeWeight(2);
+    for (Rectangle face : faces) {
+      rect(face.x, face.y, face.width, face.height);
+    }
+  }
+}

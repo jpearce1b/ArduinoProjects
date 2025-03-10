@@ -1,0 +1,18 @@
+const int ledPin = 9;  // LED connected to pin 9
+char incomingData;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    incomingData = Serial.read();
+    if (incomingData == '1') {
+      digitalWrite(ledPin, HIGH);  // Turn LED on
+    } else if (incomingData == '0') {
+      digitalWrite(ledPin, LOW);   // Turn LED off
+    }
+  }
+}

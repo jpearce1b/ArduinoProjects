@@ -1,0 +1,42 @@
+import gab.opencv.*;
+import processing.video.*;
+import java.util.*;
+import java.awt.Rectangle;
+
+Capture video;
+OpenCV opencv;
+
+void setup() {
+  size(640, 480);
+  video = new Capture(this, 640, 480);
+  video.start();
+  
+  opencv = new OpenCV(this, 640, 480);
+  opencv.loadCascade(OpenCV.CASCADE_FRONTALFACE); // Load face detection model
+}
+
+void draw() {
+  if (video.available()) {
+    video.read();
+  }
+
+  image(video, 0, 0);  // Draw the webcam feed
+  opencv.loadImage(video);  // Load image into OpenCV
+
+  // Detect faces
+  Rectangle[] faces = opencv.detect();
+
+  // Draw face rectangles and show "Face Detected" message
+  if (faces.length > 0) {
+    fill(255, 0, 0);
+    textSize(32);
+    text("Face Detected", 20, 40);
+    
+    noFill();
+    stroke(0, 255, 0);
+    strokeWeight(2);
+    for (int i = 0; i < faces.length; i++) {
+      rect(faces[i].x, faces[i].y, faces[i].width, faces[i].height);
+    }
+  }
+}

@@ -1,0 +1,103 @@
+import processing.serial.*;
+import processing.video.*;
+
+Serial myPort;
+Movie video1, video2, video3, video4;
+Movie currentlyPlayingVideo = null;
+
+PImage splash1, splash2;
+
+int splashInterval = 3000;
+int lastSwitchTime = 0;
+boolean showFirstSplash = true;
+
+void setup() {
+    fullScreen(P2D, 1);
+  size(1920, 1080);
+
+  println("Available serial ports:");
+  String[] portList = Serial.list();
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]);
+  }
+
+  int portIndex = 2; // Adjust as needed
+  String portName = portList[portIndex];
+  myPort = new Serial(this, portName, 9600);
+
+  video1 = new Movie(this, "video1.mp4");
+  video2 = new Movie(this, "video2.mp4");
+  video3 = new Movie(this, "video3.mp4");
+  video4 = new Movie(this, "video4.mp4");
+
+  splash1 = loadImage("splash.png");
+  splash2 = loadImage("splash2.png");
+
+  lastSwitchTime = millis();
+}
+
+void movieEvent(Movie m) {
+  m.read();
+}
+
+void draw() {
+  background(0);
+
+  // Read serial input
+  if (myPort.available() > 0) {
+    String inString = myPort.readStringUntil('\n');
+    if (inString != null) {
+      inString = inString.trim();
+
+      stopAllVideos();
+
+      if (inString.equals("1")) {
+        playVideo(video1);
+      } else if (inString.equals("2")) {
+        playVideo(video2);
+      } else if (inString.equals("3")) {
+        playVideo(video3);
+      } else if (inString.equals("4")) {
+        playVideo(video4);
+      }
+    }
+  }
+
+  // If a video is playing and has frames, show it
+  if (currentlyPlayingVideo != null && currentlyPlayingVideo.isPlaying()) {
+    image(currentlyPlayingVideo, 0, 0, width, height);
+  } else {
+    // No video playing — reset state and loop splash images
+    currentlyPlayingVideo = null;
+
+    if (millis() - lastSwitchTime >= splashInterval) {
+      showFirstSplash = !showFirstSplash;
+      lastSwitchTime = millis();
+    }
+
+    if (showFirstSplash) {
+      image(splash1, 0, 0, width, height);
+    } else {
+      image(splash2, 0, 0, width, height);
+    }
+  }
+}
+
+void playVideo(Movie video) {
+  currentlyPlayingVideo = video;
+  video.jump(0);
+  video.play();
+}
+
+void stopAllVideos() {
+  if (video1.isPlaying()) video1.stop();
+  if (video2.isPlaying()) video2.stop();
+  if (video3.isPlaying()) video3.stop();
+  if (video4.isPlaying()) video4.stop();
+  currentlyPlayingVideo = null;
+}
+
+void stop() {
+  stopAllVideos();
+  super.stop();
+}

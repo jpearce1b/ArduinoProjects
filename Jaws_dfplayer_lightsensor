@@ -1,0 +1,53 @@
+#include <SoftwareSerial.h>
+#include <DFRobotDFPlayerMini.h>
+
+SoftwareSerial mySerial(10, 11); // RX, TX
+DFRobotDFPlayerMini myDFPlayer;
+
+const int photoPin = A0;
+const int threshold = 300;
+
+bool isPlaying = false;
+unsigned long triggerTime = 0;
+
+const unsigned long playDuration = 52000;   // 52 seconds
+const unsigned long cooldownDuration = 10000; // 10 seconds
+
+void setup() {
+  Serial.begin(9600);
+  mySerial.begin(9600);
+
+  Serial.println("Initializing DFPlayer...");
+
+  if (!myDFPlayer.begin(mySerial)) {
+    Serial.println("❌ DFPlayer Mini not detected.");
+    while (true);
+  }
+
+  Serial.println("✅ DFPlayer Mini ready!");
+  myDFPlayer.volume(20);
+}
+
+void loop() {
+  int lightLevel = analogRead(photoPin);
+  Serial.println(lightLevel);  // Debugging only
+
+  unsigned long currentTime = millis();
+
+  // Check if we're currently in the playback period
+  if (isPlaying) {
+    if (currentTime - triggerTime >= playDuration + cooldownDuration) {
+      isPlaying = false; // Done with play + cooldown
+      Serial.println("🎵 Ready for next trigger.");
+    }
+    return; // While playing or cooling down, don't check photoresistor
+  }
+
+  // If light drops below threshold and not already playing
+  if (lightLevel < threshold) {
+    myDFPlayer.play(1);  // Play 0001.mp3
+    Serial.println("▶️ Triggered by light sensor!");
+    triggerTime = currentTime;
+    isPlaying = true;
+  }
+}

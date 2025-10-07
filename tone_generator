@@ -1,0 +1,99 @@
+/*
+  Audio Burst LED Indicator + Serial Plotter
+  - Lights onboard LED for 0.2 s ONLY when the burst lasts >= 0.3 s
+  - Uses rectified+smoothed envelope with hysteresis (robust to zero crossings)
+  - Serial Plotter output unchanged: "raw    ac"
+*/
+
+const int AUDIO_PIN = A0;
+const int LED_PIN   = 13;
+
+const unsigned long TARGET_SAMPLE_HZ = 4000;
+const float BASELINE_ALPHA = 0.005f;      // DC bias tracker (centers around ~512)
+
+// Envelope & detection tuning
+const float ENV_ALPHA = 0.05f;            // 0.03–0.10; higher = faster envelope
+const int   ON_THRESH  = 25;              // envelope ON threshold (ADC counts)
+const int   OFF_THRESH = 15;              // envelope OFF threshold (< ON_THRESH)
+const unsigned long MIN_BURST_MS = 300;   // require >= 0.3 s above ON to trigger
+const unsigned long LED_ON_TIME  = 200;   // LED blink duration in ms
+
+// Sampling
+unsigned long sampleIntervalUs;
+unsigned long nextSampleUs = 0;
+
+// State
+float baseline = 512.0f;
+float env = 0.0f;
+
+bool above = false;                 // envelope currently above threshold (with hysteresis)
+unsigned long aboveSinceMs = 0;
+bool burstFired = false;
+
+bool ledOn = false;
+unsigned long ledOffTime = 0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(AUDIO_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  sampleIntervalUs = 1000000UL / TARGET_SAMPLE_HZ;
+  nextSampleUs = micros();
+
+  // Keep the same columns for Serial Plotter
+  Serial.println("raw\tac");
+}
+
+void loop() {
+  unsigned long nowUs = micros();
+  if ((long)(nowUs - nextSampleUs) >= 0) {
+    nextSampleUs += sampleIntervalUs;
+
+    int raw = analogRead(AUDIO_PIN);
+
+    // Track DC bias and compute centered AC
+    baseline += BASELINE_ALPHA * ((float)raw - baseline);
+    int ac = (int)((float)raw - baseline);
+
+    // Envelope of rectified signal
+    float mag = abs(ac);
+    env += ENV_ALPHA * (mag - env);
+
+    unsigned long nowMs = millis();
+
+    // Hysteresis on the envelope
+    if (!above) {
+      if (env >= ON_THRESH) {
+        above = true;
+        aboveSinceMs = nowMs;
+        burstFired = false;
+      }
+    } else {
+      if (env <= OFF_THRESH) {
+        above = false;
+        burstFired = false; // ready for next burst after falling below OFF
+      }
+    }
+
+    // Duration gate: only trigger if envelope has stayed high long enough
+    if (above && !burstFired && (nowMs - aboveSinceMs >= MIN_BURST_MS)) {
+      burstFired = true;
+      ledOn = true;
+      ledOffTime = nowMs + LED_ON_TIME;
+      digitalWrite(LED_PIN, HIGH);
+    }
+
+    // LED off after hold time
+    if (ledOn && nowMs >= ledOffTime) {
+      ledOn = false;
+      digitalWrite(LED_PIN, LOW);
+    }
+
+    // Serial output (unchanged)
+    Serial.print(raw);
+    Serial.print('\t');
+    Serial.println(ac);
+  }
+}

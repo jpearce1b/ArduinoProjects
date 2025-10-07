@@ -1,0 +1,94 @@
+#include <DMXSerial.h>
+
+// =====================
+// ADDRESS & MODE SETUP
+// =====================
+// Light 1 (Betopper LPC007)
+const int L1_START = 1;       // D001
+const bool L1_HAS_DIMMER = true;  // LPC007 7ch has master dimmer on CH1
+const bool L1_IS_RGBW   = false;  // LPC007 is RGB (no dedicated W)
+
+// Light 2 (Betopper LC003-H)
+const int L2_START = 8;       // D008 (immediately after L1's 7 channels)
+const bool L2_HAS_DIMMER = true;  // Most LC003-H modes include a master dimmer
+const bool L2_IS_RGBW   = true;   // Many LC003-H variants have a White channel
+
+// =====================
+// LOW-LEVEL HELPERS
+// =====================
+void writeRGB(int start, bool hasDimmer, uint8_t r, uint8_t g, uint8_t b) {
+  if (hasDimmer) DMXSerial.write(start + 0, 255); // master dimmer full
+  DMXSerial.write(start + (hasDimmer ? 1 : 0) + 0, r); // R
+  DMXSerial.write(start + (hasDimmer ? 1 : 0) + 1, g); // G
+  DMXSerial.write(start + (hasDimmer ? 1 : 0) + 2, b); // B
+}
+
+void writeRGBW(int start, bool hasDimmer, uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+  if (hasDimmer) DMXSerial.write(start + 0, 255); // master dimmer full
+  int base = start + (hasDimmer ? 1 : 0);
+  DMXSerial.write(base + 0, r);
+  DMXSerial.write(base + 1, g);
+  DMXSerial.write(base + 2, b);
+  DMXSerial.write(base + 3, w); // W channel
+}
+
+// Quick OFF: if there’s a master dimmer, dropping it to 0 guarantees black.
+void blackout(int start, bool hasDimmer) {
+  if (hasDimmer) {
+    DMXSerial.write(start + 0, 0);  // master dimmer off
+  } else {
+    // No dimmer? Zero out RGB(W) just in case.
+    for (int i = 0; i < 6; i++) DMXSerial.write(start + i, 0);
+  }
+}
+
+// =====================
+// FRIENDLY WRAPPERS
+// =====================
+void L1_setRGB(uint8_t r, uint8_t g, uint8_t b) {
+  if (L1_IS_RGBW) writeRGBW(L1_START, L1_HAS_DIMMER, r, g, b, 0);
+  else            writeRGB (L1_START, L1_HAS_DIMMER, r, g, b);
+}
+void L1_off() { blackout(L1_START, L1_HAS_DIMMER); }
+
+void L2_setWhite(uint8_t white) {
+  if (L2_IS_RGBW) {
+    // Pure white via W channel
+    writeRGBW(L2_START, L2_HAS_DIMMER, 0, 0, 0, white);
+  } else {
+    // If no W channel, approximate white with RGB
+    writeRGB(L2_START, L2_HAS_DIMMER, white, white, white);
+  }
+}
+void L2_off() { blackout(L2_START, L2_HAS_DIMMER); }
+
+// =====================
+// ARDUINO LIFECYCLE
+// =====================
+void setup() {
+  DMXSerial.init(DMXController);
+
+  // Initialize DMX universe to zero
+  for (int ch = 1; ch <= 512; ch++) DMXSerial.write(ch, 0);
+  delay(10);
+}
+
+void loop() {
+  // --- Light 1: RED for 3s ---
+  L2_off();
+  L1_setRGB(255, 0, 0);
+  delay(3000);
+
+  // --- Light 1: BLUE for 3s ---
+  L1_setRGB(0, 0, 255);
+  delay(3000);
+
+  // --- Switch: L1 OFF, L2 WHITE ON for 3s ---
+  L1_off();
+  L2_setWhite(255);
+  delay(3000);
+
+  // --- L2 OFF, loop back to start (L1 red) ---
+  L2_off();
+  // loop repeats
+}

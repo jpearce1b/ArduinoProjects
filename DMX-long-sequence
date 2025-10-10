@@ -1,1 +1,159 @@
+#include <DMXSerial.h>
+
+/* =====================
+   COLOR DEFINITIONS
+   ===================== */
+struct RGB { uint8_t r, g, b; };
+
+const RGB BLACK        = { 0,   0,   0   };
+const RGB NAVY         = { 0,   0,   120 };
+const RGB REDC         = { 255, 0,   0   };
+const RGB PURPLE_BLUE  = { 128, 0,   255 };
+const RGB GREY_WHITE   = { 200, 200, 200 };
+const RGB BLUE         = { 0,   0,   255 };
+
+/* =====================
+   FIXTURE MAP (LPC007)
+   A001 (7-ch): 1=Dim, 2=R, 3=G, 4=B, 5..7 effects
+   ===================== */
+const int L1_START      = 1;    // CH1..CH7 used by fixture
+const bool L1_HAS_DIMMER = true;
+
+/* =====================
+   DMX HELPERS
+   ===================== */
+inline void dmxWrite(int ch, uint8_t v) {
+  if (ch >= 1 && ch <= 512) DMXSerial.write(ch, v);
+}
+
+void L1_set(const RGB &c) {
+  // If color is black, kill on master dimmer; else full dimmer + RGB
+  if (c.r == 0 && c.g == 0 && c.b == 0) {
+    dmxWrite(L1_START + 0, 0); // master dimmer OFF
+  } else {
+    dmxWrite(L1_START + 0, 255);   // master dimmer ON
+    dmxWrite(L1_START + 1, c.r);   // R
+    dmxWrite(L1_START + 2, c.g);   // G
+    dmxWrite(L1_START + 3, c.b);   // B
+    // Zero effects just in case
+    dmxWrite(L1_START + 4, 0);
+    dmxWrite(L1_START + 5, 0);
+    dmxWrite(L1_START + 6, 0);
+  }
+}
+
+void L1_fade(const RGB &from, const RGB &to, unsigned long ms, int steps = 120) {
+  if (ms == 0 || steps <= 0) { L1_set(to); return; }
+  unsigned long stepDelay = ms / steps;
+  for (int i = 0; i <= steps; i++) {
+    RGB c = {
+      (uint8_t)(from.r + (int)(to.r - from.r) * i / steps),
+      (uint8_t)(from.g + (int)(to.g - from.g) * i / steps),
+      (uint8_t)(from.b + (int)(to.b - from.b) * i / steps)
+    };
+    L1_set(c);
+    delay(stepDelay);
+  }
+}
+
+void L1_hold(const RGB &c, unsigned long ms) {
+  L1_set(c);
+  delay(ms);
+}
+
+/* Strobe: “slow strobe effect (10% dim → off → 100% → off)”
+   Each *strobe cycle* duration = periodMs.
+   Runs for totalMs (will truncate the last cycle to fit).
+   We keep color hue constant; only scale brightness.
+*/
+void L1_strobe(const RGB &base, unsigned long periodMs, unsigned long totalMs) {
+  unsigned long tStart = millis();
+  while (true) {
+    unsigned long elapsed = millis() - tStart;
+    if (elapsed >= totalMs) break;
+    unsigned long remain = totalMs - elapsed;
+    unsigned long seg = periodMs / 4; // 4 phases: 10% → off → 100% → off
+
+    // Phase 1: 10% brightness
+    RGB p10 = { (uint8_t)(base.r / 10), (uint8_t)(base.g / 10), (uint8_t)(base.b / 10) };
+    L1_set(p10); delay(min(seg, remain)); if ((remain -= min(seg, remain)) == 0) break;
+
+    // Phase 2: off
+    L1_set(BLACK); delay(min(seg, remain)); if ((remain -= min(seg, remain)) == 0) break;
+
+    // Phase 3: 100% brightness
+    L1_set(base);  delay(min(seg, remain)); if ((remain -= min(seg, remain)) == 0) break;
+
+    // Phase 4: off
+    L1_set(BLACK); delay(min(seg, remain));
+  }
+}
+
+/* =====================
+   SETUP
+   ===================== */
+void setup() {
+  DMXSerial.init(DMXController);
+  for (int ch = 1; ch <= 32; ch++) dmxWrite(ch, 0);
+  delay(10);
+  L1_set(BLACK);  // start dark
+}
+
+/* =====================
+   LOOP = TIMELINE
+   ===================== */
+void loop() {
+  // 0:00 No light - Fade to NAVY (0→5s)
+  L1_fade(BLACK, NAVY, 5000);
+
+  // 0:05 Full NAVY hold (to 0:16) = 11s
+  L1_hold(NAVY, 11000);
+
+  // 0:16 Fade NAVY → RED (6s, to 0:22)
+  L1_fade(NAVY, REDC, 6000);
+
+  // 0:22 Full RED hold (to 0:46) = 24s
+  L1_hold(REDC, 24000);
+
+  // 0:46 Fade RED → BLACK (4s, to 0:50)
+  L1_fade(REDC, BLACK, 4000);
+
+  // 0:50 Fade BLACK → NAVY (3s, to 0:53)
+  L1_fade(BLACK, NAVY, 3000);
+
+  // 0:53 Slow strobe NAVY (each strobe = 5s) until 1:29 (36s total)
+  L1_strobe(NAVY, 5000, 36000);
+
+  // 1:29 Fade NAVY → PURPLE_BLUE (4s, to 1:33)
+  L1_fade(NAVY, PURPLE_BLUE, 4000);
+
+  // 1:33 Full PURPLE_BLUE hold (to 1:41) = 8s
+  L1_hold(PURPLE_BLUE, 8000);
+
+  // 1:41 Fade PURPLE_BLUE → GREY_WHITE (3s, to 1:44)
+  L1_fade(PURPLE_BLUE, GREY_WHITE, 3000);
+
+  // 1:44 Full GREY_WHITE hold (to 2:08) = 24s
+  L1_hold(GREY_WHITE, 24000);
+
+  // 2:08 Fade GREY_WHITE → BLACK (16s, to 2:24)
+  L1_fade(GREY_WHITE, BLACK, 16000);
+
+  // 2:24 RED fade in (24s, to 2:48)
+  L1_fade(BLACK, REDC, 24000);
+
+  // 2:48 Full RED + slow strobe (each strobe = 2s) until 3:10 (22s total)
+  L1_strobe(REDC, 2000, 22000);
+
+  // 3:10 Fade RED → NAVY (22s, to 3:32)
+  L1_fade(REDC, NAVY, 22000);
+
+  // 3:32 Fade NAVY → BLUE (31s, to 4:03)
+  L1_fade(NAVY, BLUE, 31000);
+
+  // 4:03 Fade BLUE → BLACK (3s, to 4:06)
+  L1_fade(BLUE, BLACK, 3000);
+
+  // 4:06 No light, loop back to start
+}
 

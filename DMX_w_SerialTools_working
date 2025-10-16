@@ -1,5 +1,7 @@
 #include <DMXSerial.h>
 
+// Note wiring: Serial Interface TX - Mega16, Serial Interace Rx - Mega15, Serial Interface GND - MegaGND
+
 /* =====================
    COLOR DEFINITIONS
    ===================== */

@@ -1,0 +1,46 @@
+#include <ps2dev.h>
+
+// Initialize the PS/2 device on pins 2 (clock) and 3 (data)
+PS2dev keyboard(9, 8);
+
+// Variables for timing
+unsigned long previousMillis = 0; // Stores the last time the key was sent
+const long interval = 5000;       // Interval at which to send the key (5000ms = 5 seconds)
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println("PS/2 Keyboard Emulation - Sending Spacebar every 5 seconds");
+  delay(2000); // Wait for the system to initialize
+}
+
+void loop() {
+  // Get the current time
+  unsigned long currentMillis = millis();
+
+  // Check if 5 seconds have passed since the last keypress
+  if (currentMillis - previousMillis >= interval) {
+    // Save the current time as the last time the key was sent
+    previousMillis = currentMillis;
+    
+    // Send the spacebar command
+    sendKey(0x29);
+    
+    Serial.println("Sending SPACEBAR");
+  }
+}
+
+/**
+ * Sends a keypress and key release for a given PS/2 make code.
+ * @param makeCode The PS/2 make code for the desired key.
+ */
+void sendKey(uint8_t makeCode) {
+  // Send the make code (key pressed)
+  keyboard.write(makeCode);
+
+  // Wait a short duration to simulate key being held
+  delay(10);
+
+  // Send the break code (key released)
+  keyboard.write(0xF0);
+  keyboard.write(makeCode);
+}

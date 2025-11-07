@@ -1,0 +1,51 @@
+#include <Servo.h>
+
+// Pin assignments for buttons
+const int button1Pin = 2;
+const int button2Pin = 3;
+const int button3Pin = 4;
+
+// Servo pin
+const int servoPin = 9;
+Servo myServo;
+
+void setup() {
+  // Initialize buttons with internal pull-ups
+  pinMode(button1Pin, INPUT_PULLUP);
+  pinMode(button2Pin, INPUT_PULLUP);
+  pinMode(button3Pin, INPUT_PULLUP);
+
+  // Attach servo
+  myServo.attach(servoPin);
+  myServo.write(0);  // start position
+
+  // Serial for communication
+  Serial.begin(9600);
+}
+
+void loop() {
+  // --- Button 1 ---
+  if (digitalRead(button1Pin) == LOW) {
+    Serial.println("1");
+    delay(200);  // debounce
+  }
+
+  // --- Button 2 ---
+  if (digitalRead(button2Pin) == LOW) {
+    Serial.println("2");
+    delay(200);  // debounce
+  }
+
+  // --- Button 3 ---
+  if (digitalRead(button3Pin) == LOW) {
+   // Serial.println("3");
+
+    // Move servo to 180°
+    myServo.write(180);
+    delay(3000);  // wait 3 seconds
+    // Move back to 0°
+    myServo.write(0);
+
+    delay(200);  // debounce
+  }
+}

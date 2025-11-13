@@ -1,0 +1,54 @@
+// Pin assignments for buttons
+const int button1Pin = 2;
+const int button2Pin = 3;
+const int button3Pin = 4;
+
+int cycleValue = 2;  // Start cycle for button2
+
+// Debounce timing
+const unsigned long debounceDelay = 200; // increase to 200–250 if needed
+
+// Last press time for each button
+unsigned long lastPress1 = 0;
+unsigned long lastPress2 = 0;
+unsigned long lastPress3 = 0;
+
+void setup() {
+  pinMode(button1Pin, INPUT_PULLUP);
+  pinMode(button2Pin, INPUT_PULLUP);
+  pinMode(button3Pin, INPUT_PULLUP);
+
+  Serial.begin(9600);
+}
+
+void loop() {
+  unsigned long currentTime = millis();
+
+  // -------- BUTTON 1 --------
+  if (digitalRead(button1Pin) == LOW) {
+    if (currentTime - lastPress1 > debounceDelay) {
+      Serial.println("1");
+      lastPress1 = currentTime;
+    }
+  }
+
+  // -------- BUTTON 2 (cycle through 2→6→2…) --------
+  if (digitalRead(button2Pin) == LOW) {
+    if (currentTime - lastPress2 > debounceDelay) {
+      Serial.println(cycleValue);
+
+      cycleValue++;
+      if (cycleValue > 6) cycleValue = 2;
+
+      lastPress2 = currentTime;
+    }
+  }
+
+  // -------- BUTTON 3 --------
+  if (digitalRead(button3Pin) == LOW) {
+    if (currentTime - lastPress3 > debounceDelay) {
+      Serial.println("7");
+      lastPress3 = currentTime;
+    }
+  }
+}

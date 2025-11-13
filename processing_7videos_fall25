@@ -1,0 +1,95 @@
+import processing.serial.*;
+import processing.video.*; // Import the video library
+
+Serial myPort;       // The serial port object
+Movie video1, video2, video3, video4, video5, video6, video7; // 7 video objects
+
+void setup() {
+
+ fullScreen(P2D, 1);
+  size(800, 640);
+
+  println("Available serial ports:");
+  String[] portList = Serial.list();
+
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]);
+  }
+
+  int portIndex = 2; // Change to correct index after running once
+  String portName = portList[portIndex];
+
+  myPort = new Serial(this, portName, 9600);
+
+  // Load video files (make sure filenames match your "data" folder)
+  video1 = new Movie(this, "video1.mp4");
+  video2 = new Movie(this, "video2.mp4");
+  video3 = new Movie(this, "video3.mp4");
+  video4 = new Movie(this, "video4.mp4");
+  video5 = new Movie(this, "video5.mp4");
+  video6 = new Movie(this, "video6.mp4");
+  video7 = new Movie(this, "video7.mp4");
+}
+
+void movieEvent(Movie m) {
+  m.read();
+}
+
+void draw() {
+  background(0);
+
+  if (myPort.available() > 0) {
+    String inString = myPort.readStringUntil('\n');
+    if (inString != null) {
+      inString = inString.trim();
+
+      // SERIAL TRIGGERS FOR 7 VIDEOS
+      if (inString.equals("1")) {
+        stopAllVideos(); playVideo(video1);
+      } else if (inString.equals("2")) {
+        stopAllVideos(); playVideo(video2);
+      } else if (inString.equals("3")) {
+        stopAllVideos(); playVideo(video3);
+      } else if (inString.equals("4")) {
+        stopAllVideos(); playVideo(video4);
+      } else if (inString.equals("5")) {
+        stopAllVideos(); playVideo(video5);
+      } else if (inString.equals("6")) {
+        stopAllVideos(); playVideo(video6);
+      } else if (inString.equals("7")) {
+        stopAllVideos(); playVideo(video7);
+      }
+    }
+  }
+
+  // DRAW whichever video is playing
+  if (video1.isPlaying())      image(video1, 0, 0, width, height);
+  else if (video2.isPlaying()) image(video2, 0, 0, width, height);
+  else if (video3.isPlaying()) image(video3, 0, 0, width, height);
+  else if (video4.isPlaying()) image(video4, 0, 0, width, height);
+  else if (video5.isPlaying()) image(video5, 0, 0, width, height);
+  else if (video6.isPlaying()) image(video6, 0, 0, width, height);
+  else if (video7.isPlaying()) image(video7, 0, 0, width, height);
+}
+
+// Play chosen video
+void playVideo(Movie video) {
+  video.jump(0);
+  video.play();
+}
+
+// Stop all videos
+void stopAllVideos() {
+  if (video1.isPlaying()) video1.stop();
+  if (video2.isPlaying()) video2.stop();
+  if (video3.isPlaying()) video3.stop();
+  if (video4.isPlaying()) video4.stop();
+  if (video5.isPlaying()) video5.stop();
+  if (video6.isPlaying()) video6.stop();
+  if (video7.isPlaying()) video7.stop();
+}
+
+void stop() {
+  stopAllVideos();
+  super.stop();
+}

@@ -1,0 +1,86 @@
+import processing.serial.*;
+import processing.video.*; // Import the video library
+
+Serial myPort;       // The serial port object
+Movie video1, video2, video3, video4, video5; // Video objects
+
+void setup() {
+  fullScreen(P2D, 1);
+  size(1920, 1080);
+
+  println("Available serial ports:");
+  String[] portList = Serial.list();
+  
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]);
+  }
+
+  int portIndex = 1; // Change this after checking the console
+  String portName = portList[portIndex];
+  
+  myPort = new Serial(this, portName, 9600);
+
+  // Load video files
+  video1 = new Movie(this, "video1.mp4");
+  video2 = new Movie(this, "video2.mp4");
+  video3 = new Movie(this, "video3.mp4");
+  video4 = new Movie(this, "video4.mp4");
+  video5 = new Movie(this, "video5.mp4"); // New 5th video
+}
+
+void movieEvent(Movie m) {
+  m.read(); 
+}
+
+void draw() {
+  background(0);
+
+  if (myPort.available() > 0) {
+    String inString = myPort.readStringUntil('\n');
+    if (inString != null) {
+      inString = inString.trim();
+
+      if (inString.equals("1")) {
+        stopAllVideos();
+        playVideo(video1);
+      } else if (inString.equals("2")) {
+        stopAllVideos();
+        playVideo(video2);
+      } else if (inString.equals("3")) {
+        stopAllVideos();
+        playVideo(video3);
+      } else if (inString.equals("4")) {
+        stopAllVideos();
+        playVideo(video4);
+      } else if (inString.equals("5")) {   // NEW TRIGGER
+        stopAllVideos();
+        playVideo(video5);
+      }
+    }
+  }
+  
+  // Draw whichever video is currently playing
+  if (video1.isPlaying()) image(video1, 0, 0, width, height);
+  else if (video2.isPlaying()) image(video2, 0, 0, width, height);
+  else if (video3.isPlaying()) image(video3, 0, 0, width, height);
+  else if (video4.isPlaying()) image(video4, 0, 0, width, height);
+  else if (video5.isPlaying()) image(video5, 0, 0, width, height);  // NEW
+}
+
+void playVideo(Movie video) {
+  video.play();
+  video.jump(0);
+}
+
+void stopAllVideos() {
+  if (video1.isPlaying()) video1.stop();
+  if (video2.isPlaying()) video2.stop();
+  if (video3.isPlaying()) video3.stop();
+  if (video4.isPlaying()) video4.stop();
+  if (video5.isPlaying()) video5.stop();  // NEW
+}
+
+void stop() {
+  stopAllVideos();
+  super.stop();
+}

@@ -1,0 +1,63 @@
+#include <CapacitiveSensor.h>
+
+// Each pad gets its own send + receive pin
+CapacitiveSensor pad1 = CapacitiveSensor(2, 4); // touch prints "1"
+CapacitiveSensor pad2 = CapacitiveSensor(6, 7); // touch prints "2"
+CapacitiveSensor pad3 = CapacitiveSensor(8, 9); // touch prints "3"
+
+// You can tweak these if needed
+const long touchThreshold   = 500;
+const long releaseThreshold = 50;
+
+bool touched1 = false;
+bool touched2 = false;
+bool touched3 = false;
+
+void setup() {
+  Serial.begin(9600);
+
+  // Disable auto-calibration (helps keep thresholds stable)
+  pad1.set_CS_AutocaL_Millis(0xFFFFFFFF);
+  pad2.set_CS_AutocaL_Millis(0xFFFFFFFF);
+  pad3.set_CS_AutocaL_Millis(0xFFFFFFFF);
+}
+
+void loop() {
+  long v1 = pad1.capacitiveSensor(30);
+  long v2 = pad2.capacitiveSensor(30);
+  long v3 = pad3.capacitiveSensor(30);
+
+  // Uncomment these while tuning thresholds:
+  // Serial.print("Pad1: "); Serial.print(v1);
+  // Serial.print("  Pad2: "); Serial.print(v2);
+  // Serial.print("  Pad3: "); Serial.println(v3);
+
+  // ----- Pad 1 -----
+  if (!touched1 && v1 > touchThreshold) {
+    Serial.println("1");
+    touched1 = true;
+  }
+  if (touched1 && v1 < releaseThreshold) {
+    touched1 = false;
+  }
+
+  // ----- Pad 2 -----
+  if (!touched2 && v2 > touchThreshold) {
+    Serial.println("2");
+    touched2 = true;
+  }
+  if (touched2 && v2 < releaseThreshold) {
+    touched2 = false;
+  }
+
+  // ----- Pad 3 -----
+  if (!touched3 && v3 > touchThreshold) {
+    Serial.println("3");
+    touched3 = true;
+  }
+  if (touched3 && v3 < releaseThreshold) {
+    touched3 = false;
+  }
+
+  delay(10);
+}

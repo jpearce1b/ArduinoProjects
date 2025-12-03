@@ -1,0 +1,85 @@
+#include <Adafruit_NeoPixel.h>
+
+// --------- Microphone ----------
+const int micPin = A0;
+unsigned int sampleWindow = 50;  // ms
+
+// --------- NeoPixels ----------
+#define LED_PIN    6      // Neopixel data pin
+#define LED_COUNT  8      // Number of pixels
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+// Adjust this based on how "hot" your mic is
+// Higher value = you need more volume to light all LEDs
+const int maxLevel = 600;  // try 300–600 and tweak
+
+void setup() {
+  Serial.begin(9600);
+  strip.begin();
+  strip.show();  // Initialize all pixels to 'off'
+}
+
+void loop() {
+  unsigned int peakToPeak = getPeakToPeak();
+
+  // Map peak-to-peak value (0..maxLevel) to number of LEDs (0..LED_COUNT)
+  int ledsOn = map(peakToPeak, 0, maxLevel, 0, LED_COUNT);
+  ledsOn = constrain(ledsOn, 0, LED_COUNT);
+
+  Serial.print("P2P: ");
+  Serial.print(peakToPeak);
+  Serial.print("   LEDs on: ");
+  Serial.println(ledsOn);
+
+  showLevel(ledsOn);
+
+  // small pause just so Serial Monitor isn't insane
+  delay(20);
+}
+
+// Measure peak-to-peak over sampleWindow ms
+unsigned int getPeakToPeak() {
+  unsigned int signalMax = 0;
+  unsigned int signalMin = 1023;
+
+  unsigned long startMillis = millis();
+
+  while (millis() - startMillis < sampleWindow) {
+    int sample = analogRead(micPin);
+
+    if (sample < 1023) {       // ignore occasional full-scale reading
+      if (sample > signalMax) signalMax = sample;
+      if (sample < signalMin) signalMin = sample;
+    }
+  }
+
+  return signalMax - signalMin;
+}
+
+// Light up LEDs 0..(ledsOn-1) with green/yellow/red zones
+void showLevel(int ledsOn) {
+  // Turn everything off first
+  for (int i = 0; i < LED_COUNT; i++) {
+    strip.setPixelColor(i, 0, 0, 0);
+  }
+
+  for (int i = 0; i < ledsOn; i++) {
+    uint32_t color;
+
+    if (i <= 2) {
+      // First 3 LEDs: GREEN
+      color = strip.Color(0, 150, 0);
+    } else if (i <= 5) {
+      // Next 3 LEDs: YELLOW
+      color = strip.Color(120, 120, 0);
+    } else {
+      // Last 2 LEDs: RED
+      color = strip.Color(150, 0, 0);
+    }
+
+    strip.setPixelColor(i, color);
+  }
+
+  strip.show();
+}

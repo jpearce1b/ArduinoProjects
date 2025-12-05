@@ -1,0 +1,51 @@
+#include <Servo.h>
+
+Servo myServo;
+
+const int buttonPin = 2;
+
+bool buttonPressed = false;  // tracks whether we've already handled this press
+
+void setup() {
+  myServo.attach(9);                 // servo on pin 9
+  pinMode(buttonPin, INPUT_PULLUP);  // button to GND, uses internal pull-up
+}
+
+void loop() {
+  int reading = digitalRead(buttonPin);
+
+  // Button is active LOW
+  if (reading == LOW && !buttonPressed) {
+    // Quick debounce
+    delay(30);
+    if (digitalRead(buttonPin) == LOW) {
+      buttonPressed = true;   // mark as handled
+      runServoSweep();        // do the 3 sweeps
+    }
+  }
+
+  // Reset once button is released
+  if (reading == HIGH) {
+    buttonPressed = false;
+  }
+}
+
+// --------------------------------------------------
+// Run 3 sweeps: 0→60→0
+// --------------------------------------------------
+void runServoSweep() {
+  for (int cycle = 0; cycle < 3; cycle++) {
+
+    // 0 → 60
+    for (int pos = 0; pos <= 45; pos++) {
+      myServo.write(pos);
+      delay(10);  // medium speed
+    }
+
+    // 60 → 0
+    for (int pos = 45; pos >= 0; pos--) {
+      myServo.write(pos);
+      delay(10);  // medium speed
+    }
+  }
+}

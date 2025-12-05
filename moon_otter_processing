@@ -1,0 +1,96 @@
+import processing.serial.*;
+
+Serial myPort;
+PImage currentImage;
+
+// Cache of already loaded images: key -> PImage
+HashMap<String, PImage> imageCache = new HashMap<String, PImage>();
+
+// CHANGE THIS to select the correct serial port index after you see the list in the console
+int portIndex = 0;   // e.g. 0, 1, 2 ...
+
+void setup() {
+  // Use full screen, or change to size(1920, 1080);
+  fullScreen();
+  // size(1920, 1080);
+
+  println("Available serial ports:");
+  println(Serial.list());  // prints an array of available ports to the console
+
+  // Open the chosen port at 115200 baud
+  String portName = Serial.list()[portIndex];
+  println("Opening port: " + portName);
+  myPort = new Serial(this, portName, 115200);
+
+  // Use line-based reading
+  myPort.bufferUntil('\n');
+
+  // Show default image "z.jpg" at startup
+  showImage("z");
+}
+
+void draw() {
+  background(0);
+  if (currentImage != null) {
+    // Draw the image scaled to fit the window
+    image(currentImage, 0, 0, width, height);
+  }
+}
+
+void serialEvent(Serial p) {
+  String inString = p.readStringUntil('\n');
+  if (inString == null) return;
+
+  inString = trim(inString); // remove whitespace, \r, etc.
+  if (inString.length() == 0) return;
+
+  println("Received: " + inString);
+
+  // Ignore lines like "Tag: a"
+  if (inString.startsWith("Tag:")) {
+    return;
+  }
+
+  // We care about single tokens like "1", "2", "3", "4", "5", "6", "7", "8", "9", "x", "y"
+  // You can extend this if you add more images (e.g. "a", "b", etc.)
+  if (isValidToken(inString)) {
+    showImage(inString);
+  }
+}
+
+// Helper: which messages should trigger an image?
+boolean isValidToken(String s) {
+  // Numbers 1–9
+  if (s.equals("1")) return true;
+  if (s.equals("2")) return true;
+  if (s.equals("3")) return true;
+  if (s.equals("4")) return true;
+  if (s.equals("5")) return true;
+  if (s.equals("6")) return true;
+  if (s.equals("7")) return true;
+  if (s.equals("8")) return true;
+  if (s.equals("9")) return true;
+
+  // x, y, z
+  if (s.equals("x")) return true;
+  if (s.equals("y")) return true;
+  if (s.equals("z")) return true;  // optional: if you ever resend z from Arduino
+
+  return false;
+}
+
+// Load and display image "<key>.jpg"
+void showImage(String key) {
+  PImage img = imageCache.get(key);
+  if (img == null) {
+    String filename = key + ".jpg";
+    println("Loading image: " + filename);
+    img = loadImage(filename);
+    if (img == null) {
+      println("ERROR: Could not load \"" + filename + "\" from data folder.");
+      return;
+    }
+    imageCache.put(key, img);
+  }
+  currentImage = img;
+}

@@ -1,1 +1,184 @@
+#include <SPI.h>
+#include <MFRC522.h>
+
+#define SS_PIN 10
+#define RST_PIN 9
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+// ---- YOUR 12 NFC TAGS (7-byte UIDs) ----
+byte tagUIDs[12][7] = {
+  {0x1D, 0x42, 0x97, 0xEB, 0x9B, 0x00, 0x00}, // 1 -> a
+  {0x1D, 0x24, 0x92, 0xEB, 0x9B, 0x00, 0x00}, // 2 -> b
+  {0x1D, 0x19, 0x9C, 0xEB, 0x9B, 0x00, 0x00}, // 3 -> c
+  {0x1D, 0xBE, 0x9B, 0xEB, 0x9B, 0x00, 0x00}, // 4 -> d
+  {0x1D, 0x8E, 0x9B, 0xEB, 0x9B, 0x00, 0x00}, // 5 -> e
+  {0x1D, 0x87, 0xA0, 0xEB, 0x9B, 0x00, 0x00}, // 6 -> f (FIXED!)
+  {0x1D, 0x35, 0x6E, 0xEB, 0x9B, 0x00, 0x00}, // 7 -> g
+  {0x1D, 0x48, 0x72, 0xEB, 0x9B, 0x00, 0x00}, // 8 -> h
+  {0x1D, 0x9B, 0xB7, 0xEB, 0x9B, 0x00, 0x00}, // 9 -> i
+  {0x1D, 0x14, 0xB3, 0xEB, 0x9B, 0x00, 0x00}, // 10 -> j
+  {0x1D, 0xC6, 0x4A, 0xEB, 0x9B, 0x00, 0x00}, // 11 -> k
+  {0x1D, 0xE3, 0x4D, 0xEB, 0x9B, 0x00, 0x00}  // 12 -> l
+};
+
+// ----- FIRST-TIME SEEN FLAGS -----
+bool seenA = false;
+bool seenB = false;
+bool seenC = false;
+bool seenD = false;
+bool seenE = false;
+bool seenF = false;
+
+bool sent1 = false;
+bool sent2 = false;
+bool sent3 = false;
+bool sent4 = false;
+bool sent5 = false;
+
+// ----- SEQUENCE STATE MACHINE -----
+enum SequenceState {
+  PRE_SEQUENCE,
+  AFTER_3_WAIT_4,
+  AFTER_4_WAIT_5,
+  WAIT_FOR_A,
+  WAIT_FOR_D,
+  WAIT_FOR_F   // <<< updated final stage
+};
+
+SequenceState seqState = PRE_SEQUENCE;
+unsigned long stageStartMillis = 0;
+
+bool gotFirstFInFinalStage = false;
+
+// Compare two UIDs
+bool compareUID(byte *scan, byte *known, byte size) {
+  for (byte i = 0; i < size; i++) {
+    if (scan[i] != known[i]) return false;
+  }
+  return true;
+}
+
+void setup() {
+  Serial.begin(115200);
+  SPI.begin();
+  mfrc522.PCD_Init();
+  Serial.println("Ready – scan a tag...");
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // --- Timed steps 4s after sending 3, then 4 ---
+  if (seqState == AFTER_3_WAIT_4 && !sent4) {
+    if (now - stageStartMillis >= 4000) {
+      Serial.println("4");
+      sent4 = true;
+      seqState = AFTER_4_WAIT_5;
+      stageStartMillis = now;
+    }
+  }
+  else if (seqState == AFTER_4_WAIT_5 && !sent5) {
+    if (now - stageStartMillis >= 4000) {
+      Serial.println("5");
+      sent5 = true;
+      seqState = WAIT_FOR_A;
+    }
+  }
+
+  // --- RFID detection ---
+  if (!mfrc522.PICC_IsNewCardPresent()) return;
+  if (!mfrc522.PICC_ReadCardSerial()) return;
+
+  byte uidSize = mfrc522.uid.size;
+
+  int tagIndex = -1;
+  for (int i = 0; i < 12; i++) {
+    if (compareUID(mfrc522.uid.uidByte, tagUIDs[i], uidSize)) {
+      tagIndex = i;
+      break;
+    }
+  }
+
+  if (tagIndex == -1) {
+    Serial.println("Unknown tag");
+    mfrc522.PICC_HaltA();
+    return;
+  }
+
+  char letter = 'a' + tagIndex;
+
+  // Always output the letter for each scan
+  Serial.print("Tag: ");
+  Serial.println(letter);
+
+  // ---- first-time detection phase -----
+  if (letter == 'a') seenA = true;
+  if (letter == 'b') seenB = true;
+  if (letter == 'c') seenC = true;
+  if (letter == 'd') seenD = true;
+  if (letter == 'e') seenE = true;
+  if (letter == 'f') seenF = true;
+
+  // a + b → send 1
+  if (seenA && seenB && !sent1) {
+    Serial.println("1");
+    sent1 = true;
+  }
+
+  // c + d → send 2
+  if (seenC && seenD && !sent2) {
+    Serial.println("2");
+    sent2 = true;
+  }
+
+  // e + f → send 3 → start timed sequence
+  if (seenE && seenF && !sent3) {
+    Serial.println("3");
+    sent3 = true;
+    seqState = AFTER_3_WAIT_4;
+    stageStartMillis = millis();
+  }
+
+  // ---- Main state machine ----
+  switch (seqState) {
+
+    case WAIT_FOR_A:
+      if (letter == 'a') {
+        Serial.println("6");
+        seqState = WAIT_FOR_D;
+      } else {
+        Serial.println("7");
+      }
+      break;
+
+    case WAIT_FOR_D:
+      if (letter == 'd') {
+        Serial.println("8");
+        seqState = WAIT_FOR_F;
+      } else {
+        Serial.println("9");
+      }
+      break;
+
+    case WAIT_FOR_F:
+      if (!gotFirstFInFinalStage) {
+        if (letter == 'f') {
+          Serial.println("x");  // first correct scan
+          gotFirstFInFinalStage = true;
+        } else {
+          Serial.println("y");  // wrong tag before f
+        }
+      } else {
+        // After first f → always 'y' no matter what
+        Serial.println("y");
+      }
+      break;
+
+    default:
+      break;
+  }
+
+  mfrc522.PICC_HaltA();
+}
 

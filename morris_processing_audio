@@ -1,0 +1,84 @@
+import processing.serial.*;
+import processing.sound.*; // Import the sound library
+
+Serial myPort;       // The serial port object
+SoundFile audio1, audio2, audio3, audio4, audio5; // Audio file objects
+
+void setup() {
+  // Print the list of available serial ports to the console
+  println("Available serial ports:");
+  String[] portList = Serial.list();
+  
+  // List out each port
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]);
+  }
+
+  // Select the correct serial port by its index (update this after you see the list)
+  int portIndex = 2; // <-- change to the right index
+  String portName = portList[portIndex];
+  
+  // Set up the serial communication
+  myPort = new Serial(this, portName, 9600);
+  myPort.clear();          // clear any junk
+  myPort.bufferUntil('\n'); // read until newline
+
+  // Load audio files (place in the 'data' folder)
+  audio1 = new SoundFile(this, "audio1.mp3");
+  audio2 = new SoundFile(this, "audio2.mp3");
+  audio3 = new SoundFile(this, "audio3.mp3");
+  audio4 = new SoundFile(this, "audio4.mp3");
+  audio5 = new SoundFile(this, "audio5.mp3");
+
+  // Start audio1 looping in the background and never stop it
+  audio1.loop();
+}
+
+void draw() {
+  // Nothing needed here; everything handled in serialEvent()
+}
+
+// Called automatically when a full line ('\n') is received
+void serialEvent(Serial p) {
+  String inString = p.readStringUntil('\n');
+  if (inString != null) {
+    inString = inString.trim(); // remove newline / spaces
+
+    // Trigger foreground sounds (audio2–audio5)
+    if (inString.equals("2")) {
+      stopForegroundAudio();
+      playAudio(audio2);
+    } else if (inString.equals("3")) {
+      stopForegroundAudio();
+      playAudio(audio3);
+    } else if (inString.equals("4")) {
+      stopForegroundAudio();
+      playAudio(audio4);
+    } else if (inString.equals("5")) {
+      stopForegroundAudio();
+      playAudio(audio5);
+    }
+    // Note: "1" is ignored here because audio1 is always looping.
+  }
+}
+
+// Plays a single SoundFile if it's not already playing
+void playAudio(SoundFile audio) {
+  if (!audio.isPlaying()) {
+    audio.play(); // one-shot
+  }
+}
+
+// Stop ALL foreground audio (but NOT audio1 background loop)
+void stopForegroundAudio() {
+  if (audio2.isPlaying()) audio2.stop();
+  if (audio3.isPlaying()) audio3.stop();
+  if (audio4.isPlaying()) audio4.stop();
+  if (audio5.isPlaying()) audio5.stop();
+}
+
+void stop() {
+  // Stop foreground audio on exit (audio1 will also stop when sketch ends)
+  stopForegroundAudio();
+  super.stop();
+}

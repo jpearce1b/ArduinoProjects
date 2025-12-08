@@ -1,0 +1,79 @@
+// Two ultrasonic sensors → output ONLY numbers 2–5
+// Never send the same number twice in a row
+// 5-second cooldown per sensor
+// Clean serial output for Processing
+
+const int trigA = 9;
+const int echoA = 10;
+
+const int trigB = 7;
+const int echoB = 8;
+
+const int triggerDistance = 10;      // cm
+const unsigned long cooldown = 3000; // 5 seconds
+
+unsigned long lastTriggerA = 0;
+unsigned long lastTriggerB = 0;
+
+int lastValue = 0;   // last number sent (global so both sensors avoid duplicates)
+
+long readDistanceCM(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);
+  if (duration == 0) return -1;
+
+  return duration * 0.034 / 2;
+}
+
+int getNewRandom() {
+  int r;
+  do {
+    r = random(2, 6); // 2–5 inclusive
+  } while (r == lastValue); // prevent repeats
+  lastValue = r;
+  return r;
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(trigA, OUTPUT);
+  pinMode(echoA, INPUT);
+
+  pinMode(trigB, OUTPUT);
+  pinMode(echoB, INPUT);
+
+  randomSeed(analogRead(A0));
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  long distanceA = readDistanceCM(trigA, echoA);
+  long distanceB = readDistanceCM(trigB, echoB);
+
+  // Sensor A trigger
+  if (distanceA > 0 && distanceA < triggerDistance) {
+    if (now - lastTriggerA >= cooldown) {
+      Serial.println(getNewRandom());
+      lastTriggerA = now;
+    }
+  }
+
+  // Sensor B trigger
+  if (distanceB > 0 && distanceB < triggerDistance) {
+    if (now - lastTriggerB >= cooldown) {
+      Serial.println(getNewRandom());
+      lastTriggerB = now;
+    }
+  }
+
+  delay(50);
+}
+

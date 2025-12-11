@@ -1,0 +1,86 @@
+import processing.serial.*;
+import processing.sound.*; // Import the sound library
+
+Serial myPort;       
+SoundFile audio1, audio2, audio3, audio4; 
+
+// Track current volume of audio1 (0.0–1.0)
+float audio1Volume = 1.0;
+
+void setup() {
+  size(400, 200); // Just so there is a window
+
+  // Print the list of available serial ports to the console
+  println("Available serial ports:");
+  String[] portList = Serial.list();
+  
+  for (int i = 0; i < portList.length; i++) {
+    println(i + ": " + portList[i]);
+  }
+
+  // Select the correct serial port by its index (update after checking console)
+  int portIndex = 2; // <-- change if needed
+  String portName = portList[portIndex];
+  
+  // Set up the serial communication
+  myPort = new Serial(this, portName, 9600);
+
+  // Load audio files (they must be in the "data" folder)
+  audio1 = new SoundFile(this, "audio1.mp3");
+  audio2 = new SoundFile(this, "audio2.mp3");
+  audio3 = new SoundFile(this, "audio3.mp3");
+  audio4 = new SoundFile(this, "audio4.mp3");
+
+  // Start audio1 when sketch launches
+  audio1.amp(audio1Volume);
+  audio1.loop(); // loop so it keeps going in the background
+}
+
+void draw() {
+  // Check for serial input
+  if (myPort.available() > 0) {
+    String inString = myPort.readStringUntil('\n'); // Read incoming serial data
+    if (inString != null) {
+      inString = inString.trim(); // Remove newline etc.
+      println("Received: " + inString);
+
+      if (inString.equals("1")) {
+        // First trigger: play audio2, lower audio1 by 25% (to 0.75)
+        playSingle(audio2);
+        setAudio1Volume(0.66);
+      } else if (inString.equals("2")) {
+        // Second trigger: play audio3, lower audio1 to 50%
+        playSingle(audio3);
+        setAudio1Volume(0.33);
+      } else if (inString.equals("3")) {
+        // Third trigger: play audio4, lower audio1 to 25%
+        playSingle(audio4);
+        setAudio1Volume(0.11);
+      }
+    }
+  }
+}
+
+// Helper: play a sound file from the start (no overlap mess)
+void playSingle(SoundFile sf) {
+  if (sf.isPlaying()) {
+    sf.stop();
+  }
+  sf.play();
+}
+
+// Helper: update audio1 volume safely
+void setAudio1Volume(float vol) {
+  audio1Volume = constrain(vol, 0.0, 1.0);
+  audio1.amp(audio1Volume);
+  println("audio1 volume set to: " + audio1Volume);
+}
+
+void stop() {
+  // Stop the audio files when done
+  if (audio1.isPlaying()) audio1.stop();
+  if (audio2.isPlaying()) audio2.stop();
+  if (audio3.isPlaying()) audio3.stop();
+  if (audio4.isPlaying()) audio4.stop();
+  super.stop();
+}

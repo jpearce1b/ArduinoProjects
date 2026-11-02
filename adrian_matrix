@@ -1,0 +1,215 @@
+
+#include <Adafruit_NeoPixel.h>
+
+#define LED_PIN 6
+#define WIDTH 16
+#define HEIGHT 32
+#define NUM_LEDS 512
+
+// Power-conscious settings for 5V / 2.4A
+#define BRIGHTNESS 15
+#define FRAME_DELAY 35
+
+Adafruit_NeoPixel matrix(
+  NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800
+);
+
+// Stream data: minimal memory usage
+int8_t head[WIDTH];
+uint8_t speedDelay[WIDTH];
+uint8_t counter[WIDTH];
+uint8_t trailLength[WIDTH];
+uint8_t pauseFrames[WIDTH];
+
+// Global cinematic surge
+uint8_t surgeFrames = 0;
+
+// ------------------------------------------------
+// PIXEL MAPPING
+// Both matrices rotated 90 degrees anticlockwise
+// Matrix 1 on top, Matrix 2 below
+// ------------------------------------------------
+
+uint16_t XY(uint8_t x, uint8_t y) {
+
+  uint8_t panel = y / 16;
+  uint8_t localY = y % 16;
+
+  uint8_t rotatedX = 15 - localY;
+  uint8_t rotatedY = x;
+
+  uint16_t index;
+
+  if (rotatedY % 2 == 0) {
+    index = rotatedY * 16 + rotatedX;
+  } else {
+    index = rotatedY * 16 + (15 - rotatedX);
+  }
+
+  return panel * 256 + index;
+}
+
+// ------------------------------------------------
+// RESET ONE STREAM
+// ------------------------------------------------
+
+void resetStream(uint8_t x) {
+
+  head[x] = random(-24, 0);
+  speedDelay[x] = random(2, 7);
+  counter[x] = 0;
+  trailLength[x] = random(9, 23);
+  pauseFrames[x] = random(0, 15);
+}
+
+// ------------------------------------------------
+// SETUP
+// ------------------------------------------------
+
+void setup() {
+
+  matrix.begin();
+  matrix.setBrightness(BRIGHTNESS);
+  matrix.clear();
+  matrix.show();
+
+  randomSeed(analogRead(A0));
+
+  for (uint8_t x = 0; x < WIDTH; x++) {
+    resetStream(x);
+  }
+}
+
+// ------------------------------------------------
+// MAIN ANIMATION
+// ------------------------------------------------
+
+void loop() {
+
+  // 1. Fade all existing pixels
+  for (uint16_t i = 0; i < NUM_LEDS; i++) {
+
+    uint32_t c = matrix.getPixelColor(i);
+
+    uint8_t r = c >> 16;
+    uint8_t g = c >> 8;
+    uint8_t b = c;
+
+    r = (uint16_t)r * 215 / 256;
+    g = (uint16_t)g * 215 / 256;
+    b = (uint16_t)b * 215 / 256;
+
+    matrix.setPixelColor(i, r, g, b);
+  }
+
+  // 2. Occasionally trigger a digital surge
+  if (surgeFrames == 0 && random(1200) < 2) {
+    surgeFrames = random(12, 30);
+  }
+
+  if (surgeFrames > 0) {
+    surgeFrames--;
+  }
+
+  // 3. Animate each column
+  for (uint8_t x = 0; x < WIDTH; x++) {
+
+    if (pauseFrames[x] > 0) {
+      pauseFrames[x]--;
+      continue;
+    }
+
+    counter[x]++;
+
+    uint8_t speed = speedDelay[x];
+
+    if (surgeFrames > 0) {
+      speed = max(1, speed / 2);
+    }
+
+    if (counter[x] >= speed) {
+
+      counter[x] = 0;
+      head[x]++;
+
+      // 4. Draw graduated trail
+      for (uint8_t t = 0; t < trailLength[x]; t++) {
+
+        int y = head[x] - t;
+
+        if (y < 0 || y >= HEIGHT) continue;
+
+        int intensity =
+          240 - (t * 220 / trailLength[x]);
+
+        // Character-like flicker
+        if (random(100) < 25) {
+          intensity /= random(2, 5);
+        }
+
+        // Random dark gaps in code
+        if (random(100) < 8) {
+          intensity = 0;
+        }
+
+        // Occasional bright green sparks
+        if (random(100) < 5) {
+          intensity = 255;
+        }
+
+        intensity = constrain(intensity, 0, 255);
+
+        uint8_t r = 0;
+        uint8_t g = intensity;
+        uint8_t b = 0;
+
+        // Subtle blue tint near bright head
+        if (g > 190) {
+          b = (g - 190) / 3;
+        }
+
+        matrix.setPixelColor(
+          XY(x, y),
+          matrix.Color(r, g, b)
+        );
+      }
+
+      // 5. Bright white-green leading pixel
+      if (head[x] >= 0 && head[x] < HEIGHT) {
+
+        matrix.setPixelColor(
+          XY(x, head[x]),
+          matrix.Color(175, 255, 185)
+        );
+      }
+
+      // 6. Restart after stream exits screen
+      if (head[x] - trailLength[x] >= HEIGHT) {
+        resetStream(x);
+      }
+    }
+  }
+
+  // 7. Extra random character flickering
+  // No additional framebuffer needed
+  for (uint8_t i = 0; i < 12; i++) {
+
+    uint16_t pixel = random(NUM_LEDS);
+    uint32_t c = matrix.getPixelColor(pixel);
+
+    uint8_t g = c >> 8;
+
+    if (g > 8) {
+
+      if (random(100) < 50) {
+        matrix.setPixelColor(
+          pixel,
+          matrix.Color(0, random(25, 140), 0)
+        );
+      }
+    }
+  }
+
+  matrix.show();
+  delay(FRAME_DELAY);
+}

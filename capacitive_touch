@@ -1,0 +1,320 @@
+
+import processing.serial.*;
+import java.util.ArrayList;
+
+Serial myPort;
+
+// CHANGE THIS to your Arduino's serial port index
+int portIndex = 2;
+
+float rawTouch = 0;
+float baseline = 0;
+float intensity = 0;
+float smoothIntensity = 0;
+
+boolean touching = false;
+boolean previousTouch = false;
+boolean simulation = false;
+
+ArrayList<Particle> particles = new ArrayList<Particle>();
+ArrayList<Ripple> ripples = new ArrayList<Ripple>();
+
+float t = 0;
+
+void setup() {
+  size(1100, 750, P2D);
+  smooth(8);
+
+  println("AVAILABLE SERIAL PORTS:");
+  printArray(Serial.list());
+
+  if (Serial.list().length > portIndex) {
+    myPort = new Serial(this, Serial.list()[portIndex], 115200);
+    myPort.clear();
+    myPort.bufferUntil('\n');
+  } else {
+    println("No serial port found. Press SPACE to simulate touch.");
+  }
+
+  background(4, 7, 18);
+}
+
+void draw() {
+
+  // Motion trails
+  noStroke();
+  fill(4, 7, 18, 45);
+  rect(0, 0, width, height);
+
+  t += 0.015;
+
+  // Adaptive baseline calibration
+  // Update only when the sensor is near its resting value
+  if (!touching && rawTouch > 0) {
+    baseline = lerp(baseline, rawTouch, 0.008);
+  }
+
+  float threshold = max(60, baseline * 2.5);
+
+  touching = rawTouch > threshold || simulation;
+
+  float target = touching ?
+    constrain(map(rawTouch, threshold,
+      max(threshold + 300, threshold * 8),
+      0.35, 1.0), 0.35, 1.0) : 0;
+
+  if (simulation) target = 1.0;
+
+  intensity = lerp(intensity, target, 0.12);
+  smoothIntensity = lerp(smoothIntensity, intensity, 0.08);
+
+  float cx = width / 2.0;
+  float cy = height / 2.0;
+
+  // New touch event
+  if (touching && !previousTouch) {
+    ripples.add(new Ripple());
+    for (int i = 0; i < 80; i++) {
+      particles.add(new Particle(cx, cy, true));
+    }
+  }
+
+  previousTouch = touching;
+
+  // Ambient particles
+  if (frameCount % 3 == 0) {
+    particles.add(new Particle(cx, cy, false));
+  }
+
+  // Continuous touch energy
+  if (touching) {
+    for (int i = 0; i < 3; i++) {
+      particles.add(new Particle(cx, cy, true));
+    }
+    if (frameCount % 18 == 0) {
+      ripples.add(new Ripple());
+    }
+  }
+
+  blendMode(ADD);
+
+  // Outer glow
+  drawGlow(cx, cy);
+
+  // Organic energy filaments
+  drawFilaments(cx, cy);
+
+  // Central core
+  drawCore(cx, cy);
+
+  // Ripples
+  for (int i = ripples.size()-1; i >= 0; i--) {
+    Ripple r = ripples.get(i);
+    r.update();
+    r.display(cx, cy);
+    if (r.dead()) ripples.remove(i);
+  }
+
+  // Particles
+  for (int i = particles.size()-1; i >= 0; i--) {
+    Particle p = particles.get(i);
+    p.update();
+    p.display();
+    if (p.dead()) particles.remove(i);
+  }
+
+  blendMode(BLEND);
+
+  // Interface
+  fill(150, 180, 200);
+  textSize(13);
+  textAlign(LEFT);
+  text("CAPACITIVE ENERGY FIELD", 30, 35);
+  text("Sensor: " + int(rawTouch), 30, 58);
+  text("Baseline: " + int(baseline), 30, 78);
+  text("Touch: " + (touching ? "ACTIVE" : "IDLE"), 30, 98);
+
+  fill(100, 125, 150);
+  text("SPACE = simulate touch", 30, height-30);
+
+  // Energy level bar
+  noStroke();
+  fill(30, 50, 70);
+  rect(width-230, 34, 190, 5);
+  fill(0, 220, 255);
+  rect(width-230, 34, 190*smoothIntensity, 5);
+}
+
+void drawGlow(float cx, float cy) {
+  float radius = 100 + smoothIntensity * 120;
+
+  noStroke();
+  for (int i = 20; i > 0; i--) {
+    float r = radius + i * 11;
+    fill(0, 110 + smoothIntensity*90, 255, 2);
+    ellipse(cx, cy, r*2, r*2);
+  }
+}
+
+void drawFilaments(float cx, float cy) {
+
+  int lines = 90;
+  float radius = 90 + smoothIntensity * 120;
+
+  noFill();
+
+  for (int i = 0; i < lines; i++) {
+    float a = TWO_PI * i / lines;
+    float noiseValue = noise(
+      cos(a)*1.5 + 5,
+      sin(a)*1.5 + 5,
+      t
+    );
+
+    float distortion = map(noiseValue, 0, 1, -45, 70);
+    float r = radius + distortion *
+      (0.5 + smoothIntensity*2);
+
+    float x1 = cx + cos(a)*r;
+    float y1 = cy + sin(a)*r;
+
+    float a2 = a + 0.35 + sin(t+i)*0.1;
+    float r2 = r*0.55;
+
+    float x2 = cx + cos(a2)*r2;
+    float y2 = cy + sin(a2)*r2;
+
+    stroke(
+      50 + smoothIntensity*140,
+      130 + 70*sin(a*3+t),
+      255,
+      30 + smoothIntensity*110
+    );
+
+    strokeWeight(0.7 + smoothIntensity*1.3);
+    bezier(x1, y1,
+      cx + cos(a+0.5)*radius,
+      cy + sin(a+0.5)*radius,
+      cx + cos(a2)*radius*0.7,
+      cy + sin(a2)*radius*0.7,
+      x2, y2);
+  }
+}
+
+void drawCore(float cx, float cy) {
+
+  float pulse = sin(t*3)*5;
+  float r = 35 + pulse + smoothIntensity*45;
+
+  noStroke();
+
+  for (int i = 12; i > 0; i--) {
+    fill(0, 180, 255, 5);
+    ellipse(cx, cy, r*2+i*7, r*2+i*7);
+  }
+
+  fill(80+smoothIntensity*150, 190, 255, 180);
+  ellipse(cx, cy, r*2, r*2);
+
+  fill(170, 235, 255, 130);
+  ellipse(cx, cy, r*0.9, r*0.9);
+}
+
+// PARTICLES
+
+class Particle {
+  PVector pos, vel;
+  float life, maxLife;
+  float size;
+  boolean burst;
+
+  Particle(float x, float y, boolean b) {
+    pos = new PVector(x, y);
+    burst = b;
+
+    float a = random(TWO_PI);
+    float speed = burst ? random(2, 9) : random(0.2, 1.5);
+
+    vel = PVector.fromAngle(a);
+    vel.mult(speed);
+
+    maxLife = burst ? random(35, 90) : random(60, 160);
+    life = maxLife;
+    size = random(1, 4);
+  }
+
+  void update() {
+    pos.add(vel);
+    vel.mult(0.985);
+    life--;
+  }
+
+  void display() {
+    float alpha = 180 * life/maxLife;
+
+    noStroke();
+    fill(50, 180, 255, alpha);
+    ellipse(pos.x, pos.y, size*2, size*2);
+
+    fill(160, 230, 255, alpha*0.3);
+    ellipse(pos.x, pos.y, size*5, size*5);
+  }
+
+  boolean dead() {
+    return life <= 0;
+  }
+}
+
+// EXPANDING RIPPLES
+
+class Ripple {
+  float radius = 40;
+  float alpha = 220;
+
+  void update() {
+    radius += 7;
+    alpha -= 3;
+  }
+
+  void display(float x, float y) {
+    noFill();
+    stroke(30, 200, 255, alpha);
+    strokeWeight(2);
+    ellipse(x, y, radius*2, radius*2);
+  }
+
+  boolean dead() {
+    return alpha <= 0;
+  }
+}
+
+// SERIAL INPUT
+
+void serialEvent(Serial p) {
+  String data = p.readStringUntil('\n');
+
+  if (data != null) {
+    data = trim(data);
+
+    try {
+      rawTouch = max(0, float(data));
+    }
+    catch(Exception e) {
+      // Ignore incomplete or invalid serial data
+    }
+  }
+}
+
+// KEYBOARD TEST MODE
+
+void keyPressed() {
+  if (key == ' ') {
+    simulation = true;
+  }
+}
+
+void keyReleased() {
+  if (key == ' ') {
+    simulation = false;
+  }
+}

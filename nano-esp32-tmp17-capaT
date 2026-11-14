@@ -1,0 +1,69 @@
+
+#include <Wire.h>
+#include <SparkFun_TMP117.h>
+
+// TMP117 TEMPERATURE SENSOR
+TMP117 sensor;
+
+// BUILT-IN CAPACITIVE TOUCH
+const int touchPin = A0;
+
+// Touch threshold
+// No touch ~33000
+// Touch ~60000-200000
+const uint32_t touchThreshold = 45000;
+
+float tempC = 0;
+
+void setup() {
+  Serial.begin(115200);
+  delay(1500);
+
+  Serial.println();
+  Serial.println("TMP117 + CAPACITIVE TOUCH");
+  Serial.println("-------------------------");
+
+  // TMP117: SDA = A4, SCL = A5
+  Wire.begin();
+
+  if (!sensor.begin()) {
+    Serial.println("TMP117 not detected!");
+    while (1) {
+      delay(100);
+    }
+  }
+
+  Serial.println("TMP117 ready!");
+  Serial.println("Touch sensor ready!");
+  Serial.println("-------------------------");
+}
+
+void loop() {
+
+  // READ TEMPERATURE
+  if (sensor.dataReady()) {
+    tempC = sensor.readTempC();
+  }
+
+  // READ CAPACITIVE TOUCH
+  uint32_t touchValue = touchRead(touchPin);
+
+  // DETECT TOUCH
+  bool touched = (touchValue > touchThreshold);
+
+  // SERIAL MONITOR OUTPUT
+  Serial.print("Temperature: ");
+  Serial.print(tempC, 2);
+  Serial.print(" C");
+
+  Serial.print("  |  Touch: ");
+  Serial.print(touchValue);
+
+  if (touched) {
+    Serial.println("  *** TOUCHED! ***");
+  } else {
+    Serial.println("  No touch");
+  }
+
+  delay(200);
+}

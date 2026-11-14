@@ -1,0 +1,563 @@
+
+import processing.serial.*;
+import processing.sound.*;
+
+// THERMAL / TOUCH v3
+// Arduino Nano ESP32 + TMP117 + Capacitive Touch
+//
+// 24 C = CALM BLUE
+// 25 C = ELECTRIC VIOLET
+// 26 C = FIERY ORANGE
+//
+// Gentle, flowing motion at all temperatures.
+// Touch once = MUSIC ON
+// Touch again = MUSIC OFF
+
+Serial arduino;
+SoundFile song;
+
+// YOUR WORKING SERIAL PORT
+int portIndex = 3;
+
+// SENSOR DATA
+float temperature = 24;
+int touchValue = 33000;
+int touchThreshold = 45000;
+
+boolean touched = false;
+boolean previousTouch = false;
+boolean musicPlaying = false;
+
+int lastToggle = 0;
+int debounceMs = 500;
+
+// TEMPERATURE RANGE
+float tempLow = 24.0;
+float tempHigh = 26.0;
+
+// VISUAL STATE
+float t = 0;
+float smoothTemp = 24;
+float heat = 0;
+float smoothEnergy = 0;
+float touchGlow = 0;
+
+int rippleStart = -2000;
+
+PFont font;
+
+void setup() {
+
+  size(1100, 750, P2D);
+  smooth(8);
+  frameRate(60);
+
+  font = createFont("Helvetica", 16);
+
+  println("AVAILABLE SERIAL PORTS:");
+
+  String[] ports = Serial.list();
+
+  for (int i = 0; i < ports.length; i++) {
+    println(i + ": " + ports[i]);
+  }
+
+  if (portIndex < 0 || portIndex >= ports.length) {
+    println("INVALID PORT INDEX!");
+    exit();
+    return;
+  }
+
+  arduino = new Serial(
+    this, ports[portIndex], 115200
+  );
+
+  arduino.bufferUntil('\n');
+
+  // YOUR EXISTING AUDIO FILE
+  song = new SoundFile(this, "song.mp3");
+
+  println("THERMAL / TOUCH v3 READY");
+}
+
+// RECEIVE ARDUINO SERIAL DATA
+void serialEvent(Serial p) {
+
+  String line = p.readStringUntil('\n');
+
+  if (line == null) return;
+
+  line = trim(line);
+
+  // Compatible with your current Arduino output:
+  // Temperature: 24.15 C | Touch: 33000
+
+  String[] values = match(
+    line,
+    "Temperature:\\s*([-0-9.]+)\\s*C\\s*\\|\\s*Touch:\\s*(\\d+)"
+  );
+
+  if (values != null) {
+    temperature = float(values[1]);
+    touchValue = int(values[2]);
+  }
+}
+
+void draw() {
+
+  // QUICK BUT SMOOTH TEMPERATURE RESPONSE
+  smoothTemp = lerp(
+    smoothTemp, temperature, 0.08
+  );
+
+  heat = constrain(
+    map(smoothTemp, tempLow, tempHigh, 0, 1),
+    0, 1
+  );
+
+  // SMOOTHLY TRANSITION VISUAL INTENSITY
+  float targetEnergy = pow(heat, 0.7);
+
+  smoothEnergy = lerp(
+    smoothEnergy, targetEnergy, 0.035
+  );
+
+  float energy = smoothEnergy;
+
+  // GENTLE, NEARLY CONSTANT ANIMATION SPEED
+  // Previous version: 0.006 + energy * 0.038
+  t += 0.006 + energy * 0.004;
+
+  // CAPACITIVE TOUCH
+  touched = touchValue > touchThreshold;
+
+  // TRIGGER ONLY ON NEW TOUCH
+  if (touched && !previousTouch &&
+      millis() - lastToggle > debounceMs) {
+
+    toggleMusic();
+
+    rippleStart = millis();
+    touchGlow = 1;
+
+    lastToggle = millis();
+  }
+
+  previousTouch = touched;
+
+  // TEMPERATURE COLOUR PALETTE
+  color cold = color(35, 135, 255);
+  color middle = color(195, 55, 235);
+  color hot = color(255, 85, 15);
+
+  color mainColour;
+
+  if (heat < 0.5) {
+    mainColour = lerpColor(
+      cold, middle, heat * 2
+    );
+  } else {
+    mainColour = lerpColor(
+      middle, hot, (heat - 0.5) * 2
+    );
+  }
+
+  drawBackground(energy);
+  drawAtmosphere(mainColour, energy);
+  drawFlowingLines(mainColour, energy);
+  drawParticles(mainColour, energy);
+  drawHeatPulse(mainColour, energy);
+  drawTouchRipple(mainColour);
+  drawInterface();
+
+  touchGlow *= 0.95;
+}
+
+// MUSIC ON/OFF
+void toggleMusic() {
+
+  if (song == null) {
+    println("ERROR: song.mp3 not loaded!");
+    return;
+  }
+
+  if (musicPlaying) {
+
+    song.stop();
+    musicPlaying = false;
+
+    println("MUSIC OFF");
+
+  } else {
+
+    song.loop();
+    musicPlaying = true;
+
+    println("MUSIC ON");
+  }
+}
+
+// TEMPERATURE-DEPENDENT BACKGROUND
+void drawBackground(float energy) {
+
+  color coldBg = color(4, 10, 30);
+  color hotBg = color(50, 8, 12);
+
+  background(
+    lerpColor(coldBg, hotBg, energy)
+  );
+
+  noStroke();
+
+  for (int i = 20; i > 0; i--) {
+
+    float radius = i * 65;
+
+    float x = width/2 +
+      sin(t * 0.5) * 180;
+
+    float y = height/2 +
+      cos(t * 0.7) * 100;
+
+    fill(
+      255,
+      65 + energy * 55,
+      90,
+      energy * 3
+    );
+
+    ellipse(x, y, radius, radius);
+  }
+}
+
+// GLOWING ATMOSPHERIC FIELD
+void drawAtmosphere(color c, float energy) {
+
+  noStroke();
+
+  float cx = width/2 +
+    sin(t * 0.6) * (60 + energy * 220);
+
+  float cy = height/2 +
+    cos(t * 0.4) * (40 + energy * 140);
+
+  for (int i = 22; i > 0; i--) {
+
+    float r = i * (30 + energy * 12);
+
+    float alpha = map(
+      i, 22, 1, 1, 10 + energy * 15
+    );
+
+    fill(
+      red(c),
+      green(c),
+      blue(c),
+      alpha
+    );
+
+    ellipse(
+      cx, cy,
+      r * (1 + energy * 0.7),
+      r * 0.75
+    );
+  }
+}
+
+// GENTLE FLOWING LINES
+// Heat increases amplitude, NOT horizontal speed.
+void drawFlowingLines(color c, float energy) {
+
+  noFill();
+
+  int lineCount = 40;
+
+  for (int j = 0; j < lineCount; j++) {
+
+    float depth = j / float(lineCount);
+
+    stroke(
+      red(c),
+      green(c),
+      blue(c),
+      25 + depth * 85 + energy * 70
+    );
+
+    strokeWeight(
+      0.8 + depth * 2 + energy * 1.5
+    );
+
+    beginShape();
+
+    for (int x = -30; x <= width + 30; x += 12) {
+
+      // Gently evolving organic noise
+      float n = noise(
+        x * 0.003,
+        j * 0.13,
+        t * 0.25
+      );
+
+      // Heat increases the SIZE of the movement
+      float noiseAmount =
+        80 + energy * 230;
+
+      float waveAmount =
+        20 + energy * 90;
+
+      // FIXED HORIZONTAL SPEED
+      float wave = sin(
+        x * 0.006
+        + t * 1.5
+        + j * 0.25
+      ) * waveAmount;
+
+      float y = height/2
+        + (j - 20) * 9
+        + (n - 0.5) * noiseAmount
+        + wave;
+
+      // TOUCH ADDS A TEMPORARY RIPPLE
+      y += sin(
+        x * 0.025 + t * 8
+      ) * touchGlow * 95;
+
+      curveVertex(x, y);
+    }
+
+    endShape();
+  }
+}
+
+// FLOATING PARTICLES
+void drawParticles(color c, float energy) {
+
+  noStroke();
+
+  int particleCount =
+    int(80 + energy * 140);
+
+  for (int i = 0; i < particleCount; i++) {
+
+    // Nearly constant movement speed
+    float speed = 0.12 + energy * 0.08;
+
+    float x = noise(
+      i * 12.8,
+      t * speed
+    ) * width;
+
+    float y = noise(
+      i * 8.3,
+      100 + t * speed
+    ) * height;
+
+    float r = 1.5 +
+      noise(i * 2.7, t) *
+      (2 + energy * 4);
+
+    fill(
+      red(c),
+      green(c),
+      blue(c),
+      45 + energy * 110 + touchGlow * 55
+    );
+
+    ellipse(x, y, r, r);
+  }
+}
+
+// SLOW BREATHING HEAT PULSE
+void drawHeatPulse(color c, float energy) {
+
+  if (energy < 0.05) return;
+
+  noFill();
+
+  // Fixed breathing frequency
+  float pulse = sin(t * 2);
+
+  float radius =
+    130 + energy * 340 + pulse * 35;
+
+  for (int i = 0; i < 5; i++) {
+
+    stroke(
+      red(c),
+      green(c),
+      blue(c),
+      energy * (65 - i * 11)
+    );
+
+    strokeWeight(
+      1 + energy * 2
+    );
+
+    ellipse(
+      width/2,
+      height/2,
+      radius + i * 45,
+      radius + i * 45
+    );
+  }
+}
+
+// RIPPLE WHEN MUSIC IS TOGGLED
+void drawTouchRipple(color c) {
+
+  float elapsed =
+    millis() - rippleStart;
+
+  if (elapsed < 1400) {
+
+    float progress =
+      elapsed / 1400.0;
+
+    float radius =
+      progress * width * 1.3;
+
+    float alpha =
+      (1 - progress) * 200;
+
+    noFill();
+
+    for (int i = 0; i < 4; i++) {
+
+      stroke(
+        red(c),
+        green(c),
+        blue(c),
+        alpha / (i + 1)
+      );
+
+      strokeWeight(2);
+
+      ellipse(
+        width/2,
+        height/2,
+        radius - i * 40,
+        radius - i * 40
+      );
+    }
+  }
+}
+
+// MINIMAL INTERFACE
+void drawInterface() {
+
+  textFont(font);
+  textAlign(LEFT);
+
+  fill(225, 230, 240);
+  textSize(13);
+
+  text("THERMAL / TOUCH", 35, 42);
+
+  // TEMPERATURE
+  fill(145, 160, 180);
+  textSize(12);
+  text("TEMPERATURE", 35, height - 95);
+
+  fill(245);
+  textSize(34);
+
+  text(
+    nf(temperature, 0, 2) + " °C",
+    35, height - 53
+  );
+
+  // HEAT BAR
+  noStroke();
+
+  fill(50, 55, 70);
+  rect(35, height - 35, 230, 4);
+
+  color barColour = lerpColor(
+    color(50, 150, 255),
+    color(255, 100, 30),
+    heat
+  );
+
+  fill(barColour);
+  rect(
+    35, height - 35,
+    230 * heat, 4
+  );
+
+  // TOUCH
+  textAlign(RIGHT);
+
+  fill(145, 160, 180);
+  textSize(12);
+
+  text(
+    "CAPACITIVE INPUT",
+    width - 35, height - 95
+  );
+
+  fill(245);
+  textSize(25);
+
+  text(
+    touchValue,
+    width - 35, height - 60
+  );
+
+  // MUSIC STATUS
+  textSize(13);
+
+  if (musicPlaying) {
+
+    fill(120, 240, 190);
+
+    text(
+      "● SOUND ACTIVE",
+      width - 35, 42
+    );
+
+  } else {
+
+    fill(145, 155, 170);
+
+    text(
+      "○ SOUND OFF",
+      width - 35, 42
+    );
+  }
+
+  // INSTRUCTION
+  textAlign(CENTER);
+  fill(150, 160, 180);
+  textSize(12);
+
+  text(
+    "TOUCH TO TOGGLE SOUND",
+    width/2, height - 30
+  );
+}
+
+// KEYBOARD BACKUP
+void keyPressed() {
+
+  if (key == ' ') {
+
+    toggleMusic();
+
+    rippleStart = millis();
+    touchGlow = 1;
+  }
+
+  // OPTIONAL TEMPERATURE TEST
+  // UP = warmer
+  // DOWN = cooler
+  if (key == CODED) {
+
+    if (keyCode == UP) {
+      temperature += 0.2;
+    }
+
+    if (keyCode == DOWN) {
+      temperature -= 0.2;
+    }
+  }
+}

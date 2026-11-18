@@ -1,0 +1,163 @@
+
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include "USB.h"
+#include "USBHIDMouse.h"
+#include <math.h>
+
+// ====================================
+// NANO ESP32 + MPU6050
+// USB MOTION MOUSE
+//
+// Mouse starts automatically
+// D2 = left mouse button
+// ====================================
+
+Adafruit_MPU6050 mpu;
+USBHIDMouse Mouse;
+
+const int triggerPin = D2;
+
+// Mouse sensitivity
+float sensitivity = 850.0;
+float deadzone = 0.045;
+
+// Corrected directions
+int xDirection = -1;
+int yDirection = -1;
+
+// Gyro calibration offsets
+float offsetX = 0;
+float offsetZ = 0;
+
+// Button debounce
+bool lastRawButton = HIGH;
+bool stableButton = HIGH;
+unsigned long debounceTime = 0;
+
+// Motion timing
+unsigned long lastMotionTime = 0;
+float remainderX = 0;
+float remainderY = 0;
+
+void setup() {
+
+  pinMode(triggerPin, INPUT_PULLUP);
+
+  // MPU6050 wiring:
+  // SDA = A4
+  // SCL = A5
+  Wire.begin();
+
+  if (!mpu.begin()) {
+    while (true) {
+      delay(100);
+    }
+  }
+
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+  // Calibrate gyro
+  // KEEP SENSOR STILL
+  delay(1000);
+
+  for (int i = 0; i < 200; i++) {
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    offsetX += g.gyro.x;
+    offsetZ += g.gyro.z;
+
+    delay(5);
+  }
+
+  offsetX /= 200.0;
+  offsetZ /= 200.0;
+
+  // Start USB mouse
+  Mouse.begin();
+  USB.begin();
+
+  lastMotionTime = micros();
+}
+
+void loop() {
+
+  // ------------------------
+  // TRIGGER BUTTON
+  // ------------------------
+
+  bool rawButton = digitalRead(triggerPin);
+  unsigned long nowMs = millis();
+
+  if (rawButton != lastRawButton) {
+    debounceTime = nowMs;
+    lastRawButton = rawButton;
+  }
+
+  if (nowMs - debounceTime >= 25 &&
+      rawButton != stableButton) {
+
+    stableButton = rawButton;
+
+    if (stableButton == LOW) {
+      Mouse.press(MOUSE_LEFT);
+    } else {
+      Mouse.release(MOUSE_LEFT);
+    }
+  }
+
+  // ------------------------
+  // GYROSCOPE MOUSE MOVEMENT
+  // ------------------------
+
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  unsigned long currentTime = micros();
+
+  float dt =
+    (currentTime - lastMotionTime) / 1000000.0;
+
+  lastMotionTime = currentTime;
+
+  if (dt > 0.1) {
+    remainderX = 0;
+    remainderY = 0;
+    delay(10);
+    return;
+  }
+
+  float yaw = g.gyro.z - offsetZ;
+  float pitch = g.gyro.x - offsetX;
+
+  // Remove tiny unwanted movements
+  if (fabs(yaw) < deadzone) yaw = 0;
+  if (fabs(pitch) < deadzone) pitch = 0;
+
+  // Calculate mouse movement
+  remainderX +=
+    yaw * sensitivity * xDirection * dt;
+
+  remainderY +=
+    pitch * sensitivity * yDirection * dt;
+
+  int moveX = constrain(
+    (int)remainderX, -15, 15
+  );
+
+  int moveY = constrain(
+    (int)remainderY, -15, 15
+  );
+
+  remainderX -= moveX;
+  remainderY -= moveY;
+
+  if (moveX != 0 || moveY != 0) {
+    Mouse.move(moveX, moveY);
+  }
+
+  delay(10);
+}

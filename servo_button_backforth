@@ -1,0 +1,69 @@
+
+#include <Servo.h>
+
+Servo motor;
+
+const int SERVO_PIN = 9;
+const int BUTTON_PIN = 2;
+
+// FS90R calibrated stop
+const int STOP_US = 1500;
+
+// Start with reliable movement in both directions
+const int CW_US  = 1400;
+const int CCW_US = 1600;
+
+// 0=STOP, 1=CW, 2=STOP, 3=CCW
+int motorState = 0;
+
+bool lastReading = HIGH;
+bool stableButtonState = HIGH;
+
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  motor.writeMicroseconds(STOP_US);
+  motor.attach(SERVO_PIN);
+  motor.writeMicroseconds(STOP_US);
+}
+
+void loop() {
+  bool reading = digitalRead(BUTTON_PIN);
+
+  if (reading != lastReading) {
+    lastDebounceTime = millis();
+  }
+
+  if (millis() - lastDebounceTime > debounceDelay) {
+    if (reading != stableButtonState) {
+      stableButtonState = reading;
+
+      if (stableButtonState == LOW) {
+        Serial.println("1");
+
+        motorState = (motorState + 1) % 4;
+
+        switch (motorState) {
+          case 1:
+            motor.writeMicroseconds(CW_US);
+            break;
+
+          case 2:
+          case 0:
+            motor.writeMicroseconds(STOP_US);
+            break;
+
+          case 3:
+            motor.writeMicroseconds(CCW_US);
+            break;
+        }
+      }
+    }
+  }
+
+  lastReading = reading;
+}
